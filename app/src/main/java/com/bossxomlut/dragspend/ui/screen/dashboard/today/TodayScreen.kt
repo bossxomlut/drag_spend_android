@@ -25,48 +25,59 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material.icons.automirrored.filled.TrendingDown
+import androidx.compose.material.icons.filled.AccountCircle
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.CalendarToday
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
-import androidx.compose.material.icons.filled.KeyboardArrowLeft
-import androidx.compose.material.icons.filled.KeyboardArrowRight
+import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FloatingActionButton
+import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
 import com.bossxomlut.dragspend.ui.components.AppToast
 import com.bossxomlut.dragspend.ui.components.ToastType
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
@@ -87,9 +98,15 @@ import java.time.format.TextStyle
 import java.util.Locale
 import kotlin.math.roundToInt
 
+// ---------------------------------------------------------------------------
+// Root screen
+// ---------------------------------------------------------------------------
+
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun TodayScreen(
     dashboardViewModel: DashboardViewModel,
+    onNavigateToSettings: () -> Unit,
     modifier: Modifier = Modifier,
     todayViewModel: TodayViewModel = koinViewModel(),
 ) {
@@ -133,170 +150,143 @@ fun TodayScreen(
     Box(modifier = Modifier.fillMaxSize()) {
         Scaffold(
             containerColor = MaterialTheme.colorScheme.background,
-            floatingActionButton = {
-            FloatingActionButton(
-                onClick = { showCreateCard = true },
-                containerColor = MaterialTheme.colorScheme.primary,
-                contentColor = MaterialTheme.colorScheme.onPrimary,
-            ) {
-                Icon(Icons.Default.Add, contentDescription = stringResource(R.string.action_new_card))
-            }
-        },
-    ) { innerPadding ->
-        Column(
-            modifier = modifier
-                .fillMaxSize()
-                .padding(innerPadding),
-        ) {
-            // Top half — Card Panel
+            topBar = {
+                TopAppBar(
+                    title = {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Box(
+                                modifier = Modifier
+                                    .size(32.dp)
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .background(MaterialTheme.colorScheme.primary),
+                                contentAlignment = Alignment.Center,
+                            ) {
+                                Icon(
+                                    imageVector = Icons.AutoMirrored.Filled.TrendingDown,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.onPrimary,
+                                    modifier = Modifier.size(18.dp),
+                                )
+                            }
+                            Spacer(modifier = Modifier.width(10.dp))
+                            Text(
+                                text = stringResource(R.string.app_name),
+                                style = MaterialTheme.typography.titleLarge,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onBackground,
+                            )
+                        }
+                    },
+                    actions = {
+                        // Today chip
+                        Surface(
+                            shape = RoundedCornerShape(20.dp),
+                            color = MaterialTheme.colorScheme.primaryContainer,
+                            modifier = Modifier.padding(end = 4.dp),
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.CalendarToday,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(14.dp),
+                                )
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text(
+                                    text = stringResource(R.string.tab_today),
+                                    style = MaterialTheme.typography.labelMedium,
+                                    color = MaterialTheme.colorScheme.primary,
+                                    fontWeight = FontWeight.SemiBold,
+                                )
+                            }
+                        }
+                        // Profile icon
+                        IconButton(onClick = onNavigateToSettings) {
+                            Icon(
+                                imageVector = Icons.Default.AccountCircle,
+                                contentDescription = stringResource(R.string.label_profile),
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.size(28.dp),
+                            )
+                        }
+                    },
+                    colors = TopAppBarDefaults.topAppBarColors(
+                        containerColor = MaterialTheme.colorScheme.background,
+                        scrolledContainerColor = MaterialTheme.colorScheme.surface,
+                    ),
+                )
+            },
+        ) { innerPadding ->
             Column(
-                modifier = Modifier
-                    .weight(1f)
-                    .fillMaxWidth()
-                    .background(MaterialTheme.colorScheme.background)
-                    .padding(horizontal = 12.dp),
+                modifier = modifier
+                    .fillMaxSize()
+                    .padding(innerPadding),
             ) {
-                OutlinedTextField(
-                    value = searchQuery,
-                    onValueChange = { searchQuery = it },
-                    placeholder = { Text(stringResource(R.string.placeholder_search_cards)) },
-                    singleLine = true,
-                    shape = RoundedCornerShape(12.dp),
+                // ── Day view (transaction list + date navigation) ──────────
+                DayView(
+                    selectedDate = selectedDate,
+                    transactions = uiState.transactions,
+                    dayTotal = uiState.dayTotal,
+                    onDateChange = { dashboardViewModel.selectDate(it) },
+                    onEditTransaction = { editTransaction = it },
+                    onDeleteTransaction = { deleteTransactionId = it.id },
+                    onCopyFromYesterday = { todayViewModel.copyFromYesterday(selectedDate) },
                     modifier = Modifier
+                        .weight(1f)
                         .fillMaxWidth()
-                        .padding(vertical = 8.dp),
+                        .onGloballyPositioned { coords ->
+                            dayViewBounds = coords.boundsInRoot()
+                        },
                 )
 
-                val expenseCards = filteredCards.filter { it.type == TransactionType.EXPENSE }
-                val incomeCards = filteredCards.filter { it.type == TransactionType.INCOME }
-
-                LazyColumn(
-                    contentPadding = PaddingValues(bottom = 8.dp),
-                    verticalArrangement = Arrangement.spacedBy(4.dp),
-                ) {
-                    if (expenseCards.isNotEmpty()) {
-                        item {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                modifier = Modifier.padding(vertical = 4.dp),
-                            ) {
-                                Box(
-                                    modifier = Modifier
-                                        .size(8.dp)
-                                        .background(MaterialTheme.colorScheme.error, CircleShape),
-                                )
-                                Spacer(modifier = Modifier.width(6.dp))
-                                Text(
-                                    text = stringResource(R.string.type_expense),
-                                    style = MaterialTheme.typography.labelMedium,
-                                    color = MaterialTheme.colorScheme.error,
-                                )
-                            }
-                        }
-                        items(expenseCards, key = { it.id }) { card ->
-                            CardItem(
-                                card = card,
-                                onTap = { todayViewModel.addTransactionFromCard(card, selectedDate) },
-                                onEdit = { editCard = card },
-                                onDelete = { deleteCardId = card.id },
-                                onDragStart = { draggingCard = card },
-                                onDragEnd = { offset ->
-                                    val bounds = dayViewBounds
-                                    if (bounds != null && bounds.contains(offset)) {
-                                        todayViewModel.addTransactionFromCard(card, selectedDate)
-                                    }
-                                    draggingCard = null
-                                    dragOffset = Offset.Zero
-                                },
-                                onDragMove = { delta -> dragOffset += delta },
-                            )
-                        }
-                    }
-
-                    if (incomeCards.isNotEmpty()) {
-                        item {
-                            Spacer(modifier = Modifier.height(8.dp))
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                modifier = Modifier.padding(vertical = 4.dp),
-                            ) {
-                                Box(
-                                    modifier = Modifier
-                                        .size(8.dp)
-                                        .background(MaterialTheme.colorScheme.tertiary, CircleShape),
-                                )
-                                Spacer(modifier = Modifier.width(6.dp))
-                                Text(
-                                    text = stringResource(R.string.type_income),
-                                    style = MaterialTheme.typography.labelMedium,
-                                    color = MaterialTheme.colorScheme.tertiary,
-                                )
-                            }
-                        }
-                        items(incomeCards, key = { it.id }) { card ->
-                            CardItem(
-                                card = card,
-                                onTap = { todayViewModel.addTransactionFromCard(card, selectedDate) },
-                                onEdit = { editCard = card },
-                                onDelete = { deleteCardId = card.id },
-                                onDragStart = { draggingCard = card },
-                                onDragEnd = { offset ->
-                                    val bounds = dayViewBounds
-                                    if (bounds != null && bounds.contains(offset)) {
-                                        todayViewModel.addTransactionFromCard(card, selectedDate)
-                                    }
-                                    draggingCard = null
-                                    dragOffset = Offset.Zero
-                                },
-                                onDragMove = { delta -> dragOffset += delta },
-                            )
-                        }
-                    }
-                }
-            }
-
-            HorizontalDivider()
-
-            // Bottom half — Day View
-            DayView(
-                selectedDate = selectedDate,
-                transactions = uiState.transactions,
-                dayTotal = uiState.dayTotal,
-                onDateChange = { dashboardViewModel.selectDate(it) },
-                onEditTransaction = { editTransaction = it },
-                onDeleteTransaction = { deleteTransactionId = it.id },
-                onCopyFromYesterday = { todayViewModel.copyFromYesterday(selectedDate) },
-                modifier = Modifier
-                    .weight(1f)
-                    .fillMaxWidth()
-                    .onGloballyPositioned { coords ->
-                        dayViewBounds = coords.boundsInRoot()
+                // ── Spending cards bottom panel ────────────────────────────
+                SpendingCardsPanel(
+                    cards = filteredCards,
+                    searchQuery = searchQuery,
+                    onSearchChange = { searchQuery = it },
+                    onCardTap = { card ->
+                        todayViewModel.addTransactionFromCard(card, selectedDate)
                     },
-            )
+                    onCardEdit = { editCard = it },
+                    onCardDelete = { deleteCardId = it.id },
+                    onDragStart = { card -> draggingCard = card },
+                    onDragEnd = { card, offset ->
+                        val bounds = dayViewBounds
+                        if (bounds != null && bounds.contains(offset)) {
+                            todayViewModel.addTransactionFromCard(card, selectedDate)
+                        }
+                        draggingCard = null
+                        dragOffset = Offset.Zero
+                    },
+                    onDragMove = { delta -> dragOffset += delta },
+                    onAddCard = { showCreateCard = true },
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
         }
 
         // Floating drag ghost
         if (draggingCard != null) {
-            Box(
+            Surface(
+                shape = RoundedCornerShape(10.dp),
+                tonalElevation = 8.dp,
+                shadowElevation = 8.dp,
                 modifier = Modifier
-                    .fillMaxSize()
                     .offset { IntOffset(dragOffset.x.roundToInt(), dragOffset.y.roundToInt()) }
                     .padding(8.dp),
             ) {
-                Surface(
-                    shape = RoundedCornerShape(8.dp),
-                    tonalElevation = 8.dp,
-                    shadowElevation = 8.dp,
-                ) {
-                    Text(
-                        text = draggingCard!!.title,
-                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
-                        style = MaterialTheme.typography.bodyMedium,
-                    )
-                }
+                Text(
+                    text = draggingCard!!.title,
+                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.SemiBold,
+                )
             }
         }
-    }
+
         AppToast(
             message = toastMessage,
             type = ToastType.ERROR,
@@ -375,118 +365,9 @@ fun TodayScreen(
     }
 }
 
-@Composable
-private fun CardItem(
-    card: SpendingCard,
-    onTap: () -> Unit,
-    onEdit: () -> Unit,
-    onDelete: () -> Unit,
-    onDragStart: () -> Unit,
-    onDragEnd: (Offset) -> Unit,
-    onDragMove: (Offset) -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    var showMenu by remember { mutableStateOf(false) }
-    var dragPosition by remember { mutableStateOf(Offset.Zero) }
-    val accentColor = if (card.type == TransactionType.EXPENSE) {
-        MaterialTheme.colorScheme.error
-    } else {
-        MaterialTheme.colorScheme.tertiary
-    }
-
-    Box(modifier = modifier) {
-        Card(
-            onClick = onTap,
-            modifier = Modifier
-                .fillMaxWidth()
-                .pointerInput(card.id) {
-                    detectDragGesturesAfterLongPress(
-                        onDragStart = { offset ->
-                            dragPosition = offset
-                            onDragStart()
-                        },
-                        onDrag = { change, dragAmount ->
-                            change.consume()
-                            dragPosition += dragAmount
-                            onDragMove(dragAmount)
-                        },
-                        onDragEnd = { onDragEnd(dragPosition) },
-                        onDragCancel = { onDragEnd(dragPosition) },
-                    )
-                },
-            shape = RoundedCornerShape(12.dp),
-            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        ) {
-            Row(modifier = Modifier.fillMaxWidth()) {
-                // Colored left accent strip
-                Box(
-                    modifier = Modifier
-                        .width(4.dp)
-                        .fillMaxHeight()
-                        .background(accentColor),
-                )
-                Row(
-                    modifier = Modifier
-                        .weight(1f)
-                        .padding(horizontal = 12.dp, vertical = 10.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    card.category?.let { cat ->
-                        CategoryIcon(icon = cat.icon, color = cat.color, size = 36.dp)
-                        Spacer(modifier = Modifier.width(10.dp))
-                    }
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = card.title,
-                            style = MaterialTheme.typography.bodyMedium,
-                            fontWeight = FontWeight.SemiBold,
-                            color = MaterialTheme.colorScheme.onSurface,
-                        )
-                        if (card.variants.isNotEmpty()) {
-                            Spacer(modifier = Modifier.height(4.dp))
-                            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                                card.variants.take(3).forEach { variant ->
-                                    Box(
-                                        modifier = Modifier
-                                            .background(
-                                                color = accentColor.copy(alpha = 0.12f),
-                                                shape = RoundedCornerShape(6.dp),
-                                            )
-                                            .padding(horizontal = 6.dp, vertical = 2.dp),
-                                    ) {
-                                        Text(
-                                            text = CurrencyFormatter.formatCompact(variant.amount),
-                                            style = MaterialTheme.typography.labelSmall,
-                                            color = accentColor,
-                                            fontWeight = FontWeight.Medium,
-                                        )
-                                    }
-                                }
-                            }
-                        }
-                    }
-                    IconButton(onClick = { showMenu = true }) {
-                        Text("⋮", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    }
-                }
-            }
-        }
-
-        DropdownMenu(expanded = showMenu, onDismissRequest = { showMenu = false }) {
-            DropdownMenuItem(
-                text = { Text(stringResource(R.string.action_edit)) },
-                onClick = { showMenu = false; onEdit() },
-                leadingIcon = { Icon(Icons.Default.Edit, contentDescription = null) },
-            )
-            DropdownMenuItem(
-                text = { Text(stringResource(R.string.action_delete), color = MaterialTheme.colorScheme.error) },
-                onClick = { showMenu = false; onDelete() },
-                leadingIcon = { Icon(Icons.Default.Delete, contentDescription = null, tint = MaterialTheme.colorScheme.error) },
-            )
-        }
-    }
-}
+// ---------------------------------------------------------------------------
+// Day view — date navigation header + transaction list
+// ---------------------------------------------------------------------------
 
 @Composable
 private fun DayView(
@@ -501,101 +382,136 @@ private fun DayView(
 ) {
     val dateFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd")
     val today = LocalDate.parse(selectedDate, dateFormatter)
-    val weekDays = (-3..3).map { today.plusDays(it.toLong()) }
+    val isToday = today == LocalDate.now()
 
     Column(modifier = modifier) {
-        // Date navigation header
+        // ── Date navigation header ─────────────────────────────────────────
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 8.dp, vertical = 4.dp),
+                .padding(horizontal = 16.dp, vertical = 4.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            IconButton(onClick = {
-                onDateChange(today.minusDays(1).format(dateFormatter))
-            }) {
-                Icon(Icons.Default.KeyboardArrowLeft, contentDescription = stringResource(R.string.action_previous_day))
+            IconButton(
+                onClick = { onDateChange(today.minusDays(1).format(dateFormatter)) },
+            ) {
+                Icon(
+                    imageVector = Icons.AutoMirrored.Filled.KeyboardArrowLeft,
+                    contentDescription = stringResource(R.string.action_previous_day),
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
             }
-            Text(
-                text = today.format(DateTimeFormatter.ofPattern("d MMM yyyy", Locale.getDefault())),
-                style = MaterialTheme.typography.titleSmall,
-                fontWeight = FontWeight.SemiBold,
-                modifier = Modifier.weight(1f),
-                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
-            )
-            IconButton(onClick = {
-                onDateChange(today.plusDays(1).format(dateFormatter))
-            }) {
-                Icon(Icons.Default.KeyboardArrowRight, contentDescription = stringResource(R.string.action_next_day))
-            }
-        }
 
-        // Week strip
-        LazyRow(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(vertical = 4.dp),
-            horizontalArrangement = Arrangement.spacedBy(4.dp),
-            contentPadding = PaddingValues(horizontal = 12.dp),
-        ) {
-            items(weekDays, key = { it.toString() }) { day ->
-                val isSelected = day == today
-                val isToday = day == LocalDate.now()
-                Box(
-                    modifier = Modifier
-                        .size(44.dp)
-                        .background(
-                            color = if (isSelected) MaterialTheme.colorScheme.primary
-                            else androidx.compose.ui.graphics.Color.Transparent,
-                            shape = CircleShape,
-                        )
-                        .then(
-                            if (isToday && !isSelected) {
-                                Modifier.border(1.5.dp, MaterialTheme.colorScheme.primary, CircleShape)
-                            } else {
-                                Modifier
-                            },
-                        )
-                        .then(
-                            Modifier.background(
-                                androidx.compose.ui.graphics.Color.Transparent,
-                                CircleShape,
-                            ),
+            Column(
+                modifier = Modifier.weight(1f),
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        text = today.dayOfWeek.getDisplayName(
+                            TextStyle.FULL,
+                            Locale.getDefault(),
                         ),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Surface(
-                        modifier = Modifier.size(44.dp),
-                        color = androidx.compose.ui.graphics.Color.Transparent,
-                        onClick = { onDateChange(day.format(dateFormatter)) },
-                    ) {
-                        Column(
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = Arrangement.Center,
-                            modifier = Modifier.fillMaxSize(),
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onBackground,
+                    )
+                    if (isToday) {
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Surface(
+                            shape = RoundedCornerShape(20.dp),
+                            color = MaterialTheme.colorScheme.primary,
                         ) {
                             Text(
-                                text = day.dayOfWeek.getDisplayName(TextStyle.NARROW, Locale.getDefault()),
+                                text = stringResource(R.string.tab_today),
                                 style = MaterialTheme.typography.labelSmall,
-                                color = if (isSelected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                            Text(
-                                text = day.dayOfMonth.toString(),
-                                style = MaterialTheme.typography.labelMedium,
-                                fontWeight = if (isSelected || isToday) FontWeight.Bold else FontWeight.Normal,
-                                color = if (isSelected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface,
+                                color = MaterialTheme.colorScheme.onPrimary,
+                                fontWeight = FontWeight.SemiBold,
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
                             )
                         }
                     }
                 }
+                Text(
+                    text = today.format(DateTimeFormatter.ofPattern("d MMMM yyyy", Locale.getDefault())),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+
+            IconButton(
+                onClick = { onDateChange(today.plusDays(1).format(dateFormatter)) },
+            ) {
+                Icon(
+                    imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                    contentDescription = stringResource(R.string.action_next_day),
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
             }
         }
 
-        // Transactions list
+        // ── Day summary row ────────────────────────────────────────────────
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 2.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            // Expense total badge
+            Surface(
+                shape = RoundedCornerShape(6.dp),
+                color = MaterialTheme.colorScheme.errorContainer,
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                ) {
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Filled.TrendingDown,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.error,
+                        modifier = Modifier.size(14.dp),
+                    )
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text(
+                        text = "-${CurrencyFormatter.formatCompact(dayTotal.expense)}",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.error,
+                        fontWeight = FontWeight.Bold,
+                    )
+                }
+            }
+            Spacer(modifier = Modifier.width(10.dp))
+            Text(
+                text = "-${dayTotal.expense}",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.error,
+                fontWeight = FontWeight.SemiBold,
+            )
+            Spacer(modifier = Modifier.width(8.dp))
+            Text(
+                text = "· ${
+                    pluralStringResource(
+                        id = R.plurals.transaction_count,
+                        count = transactions.size,
+                        transactions.size,
+                    )
+                }",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+
+        HorizontalDivider(
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+            color = MaterialTheme.colorScheme.outlineVariant,
+        )
+
+        // ── Transaction list ───────────────────────────────────────────────
         LazyColumn(
             modifier = Modifier.weight(1f),
             contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
-            verticalArrangement = Arrangement.spacedBy(2.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp),
         ) {
             items(transactions, key = { it.id }) { transaction ->
                 TransactionItem(
@@ -610,13 +526,14 @@ private fun DayView(
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(80.dp),
+                            .height(100.dp),
                         contentAlignment = Alignment.Center,
                     ) {
                         Text(
                             text = stringResource(R.string.empty_transactions),
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            textAlign = TextAlign.Center,
                         )
                     }
                 }
@@ -627,14 +544,18 @@ private fun DayView(
                     onClick = onCopyFromYesterday,
                     modifier = Modifier.fillMaxWidth(),
                 ) {
-                    Icon(Icons.Default.ContentCopy, contentDescription = null)
+                    Icon(
+                        Icons.Default.ContentCopy,
+                        contentDescription = null,
+                        modifier = Modifier.size(16.dp),
+                    )
                     Spacer(modifier = Modifier.width(4.dp))
                     Text(stringResource(R.string.action_copy_from_yesterday))
                 }
             }
         }
 
-        // Daily total footer
+        // ── Daily total footer ─────────────────────────────────────────────
         Surface(
             color = MaterialTheme.colorScheme.surfaceVariant,
             modifier = Modifier.fillMaxWidth(),
@@ -670,30 +591,358 @@ private fun DayView(
                 TotalItem(
                     label = stringResource(R.string.label_net),
                     amount = dayTotal.net,
-                    color = if (dayTotal.net >= 0) MaterialTheme.colorScheme.tertiary else MaterialTheme.colorScheme.error,
+                    color = if (dayTotal.net >= 0) {
+                        MaterialTheme.colorScheme.tertiary
+                    } else {
+                        MaterialTheme.colorScheme.error
+                    },
                 )
             }
         }
     }
 }
 
+// ---------------------------------------------------------------------------
+// Spending cards bottom panel
+// ---------------------------------------------------------------------------
+
 @Composable
-private fun TotalItem(
-    label: String,
-    amount: Long,
-    color: Color,
+private fun SpendingCardsPanel(
+    cards: List<SpendingCard>,
+    searchQuery: String,
+    onSearchChange: (String) -> Unit,
+    onCardTap: (SpendingCard) -> Unit,
+    onCardEdit: (SpendingCard) -> Unit,
+    onCardDelete: (SpendingCard) -> Unit,
+    onDragStart: (SpendingCard) -> Unit,
+    onDragEnd: (SpendingCard, Offset) -> Unit,
+    onDragMove: (Offset) -> Unit,
+    onAddCard: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    Column(modifier = modifier, horizontalAlignment = Alignment.CenterHorizontally) {
-        Text(text = label, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        Text(
-            text = CurrencyFormatter.formatCompact(amount),
-            style = MaterialTheme.typography.bodyMedium,
-            fontWeight = FontWeight.SemiBold,
-            color = color,
-        )
+    val expenseCards = cards.filter { it.type == TransactionType.EXPENSE }
+    val incomeCards = cards.filter { it.type == TransactionType.INCOME }
+
+    Surface(
+        modifier = modifier,
+        color = MaterialTheme.colorScheme.surface,
+        tonalElevation = 2.dp,
+        shape = RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp),
+    ) {
+        Column(modifier = Modifier.padding(top = 12.dp, bottom = 4.dp)) {
+            // drag handle
+            Box(
+                modifier = Modifier
+                    .align(Alignment.CenterHorizontally)
+                    .size(width = 36.dp, height = 4.dp)
+                    .clip(CircleShape)
+                    .background(MaterialTheme.colorScheme.outlineVariant),
+            )
+
+            Spacer(modifier = Modifier.height(10.dp))
+
+            // Header row: title + add button
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween,
+            ) {
+                Text(
+                    text = stringResource(R.string.label_spending_cards),
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurface,
+                )
+                FilledTonalIconButton(
+                    onClick = onAddCard,
+                    modifier = Modifier.size(32.dp),
+                    colors = IconButtonDefaults.filledTonalIconButtonColors(
+                        containerColor = MaterialTheme.colorScheme.primaryContainer,
+                        contentColor = MaterialTheme.colorScheme.primary,
+                    ),
+                ) {
+                    Icon(Icons.Default.Add, contentDescription = stringResource(R.string.action_new_card))
+                }
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            // Search field
+            OutlinedTextField(
+                value = searchQuery,
+                onValueChange = onSearchChange,
+                placeholder = {
+                    Text(
+                        stringResource(R.string.placeholder_search_cards),
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                },
+                singleLine = true,
+                shape = RoundedCornerShape(12.dp),
+                textStyle = MaterialTheme.typography.bodySmall,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp)
+                    .height(48.dp),
+            )
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            // Expense cards section label
+            if (expenseCards.isNotEmpty()) {
+                Text(
+                    text = stringResource(R.string.type_expense).uppercase(),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 2.dp),
+                )
+                LazyRow(
+                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                ) {
+                    items(expenseCards, key = { it.id }) { card ->
+                        CompactCardChip(
+                            card = card,
+                            onTap = { onCardTap(card) },
+                            onEdit = { onCardEdit(card) },
+                            onDelete = { onCardDelete(card) },
+                            onDragStart = { onDragStart(card) },
+                            onDragEnd = { offset -> onDragEnd(card, offset) },
+                            onDragMove = onDragMove,
+                        )
+                    }
+                }
+            }
+
+            // Income cards section label
+            if (incomeCards.isNotEmpty()) {
+                Text(
+                    text = stringResource(R.string.type_income).uppercase(),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 2.dp),
+                )
+                LazyRow(
+                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                ) {
+                    items(incomeCards, key = { it.id }) { card ->
+                        CompactCardChip(
+                            card = card,
+                            onTap = { onCardTap(card) },
+                            onEdit = { onCardEdit(card) },
+                            onDelete = { onCardDelete(card) },
+                            onDragStart = { onDragStart(card) },
+                            onDragEnd = { offset -> onDragEnd(card, offset) },
+                            onDragMove = onDragMove,
+                        )
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(4.dp))
+        }
     }
 }
+
+// ---------------------------------------------------------------------------
+// Compact card chip — shown in the bottom cards panel
+// ---------------------------------------------------------------------------
+
+@Composable
+private fun CompactCardChip(
+    card: SpendingCard,
+    onTap: () -> Unit,
+    onEdit: () -> Unit,
+    onDelete: () -> Unit,
+    onDragStart: () -> Unit,
+    onDragEnd: (Offset) -> Unit,
+    onDragMove: (Offset) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    var showMenu by remember { mutableStateOf(false) }
+    var dragPosition by remember { mutableStateOf(Offset.Zero) }
+
+    val accentColor = if (card.type == TransactionType.EXPENSE) {
+        MaterialTheme.colorScheme.error
+    } else {
+        MaterialTheme.colorScheme.tertiary
+    }
+    val isOverBudget = card.defaultAmount > 0L
+
+    Box(modifier = modifier) {
+        Card(
+            onClick = onTap,
+            modifier = Modifier
+                .width(150.dp)
+                .pointerInput(card.id) {
+                    detectDragGesturesAfterLongPress(
+                        onDragStart = { offset ->
+                            dragPosition = offset
+                            onDragStart()
+                        },
+                        onDrag = { change, dragAmount ->
+                            change.consume()
+                            dragPosition += dragAmount
+                            onDragMove(dragAmount)
+                        },
+                        onDragEnd = { onDragEnd(dragPosition) },
+                        onDragCancel = { onDragEnd(dragPosition) },
+                    )
+                },
+            shape = RoundedCornerShape(16.dp),
+            elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
+            colors = CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.surfaceVariant,
+            ),
+            border = androidx.compose.foundation.BorderStroke(
+                width = 1.dp,
+                color = accentColor.copy(alpha = 0.3f),
+            ),
+        ) {
+            Column(modifier = Modifier.padding(10.dp)) {
+                // Icon + menu
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    card.category?.let { cat ->
+                        CategoryIcon(icon = cat.icon, color = cat.color, size = 28.dp)
+                    } ?: run {
+                        val emoji = if (card.type == TransactionType.EXPENSE) "💸" else "💰"
+                        CategoryIcon(icon = emoji, color = "#9E9E9E", size = 28.dp)
+                    }
+                    Spacer(modifier = Modifier.weight(1f))
+                    Box {
+                        IconButton(
+                            onClick = { showMenu = true },
+                            modifier = Modifier.size(24.dp),
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.MoreVert,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.size(16.dp),
+                            )
+                        }
+                        DropdownMenu(
+                            expanded = showMenu,
+                            onDismissRequest = { showMenu = false },
+                        ) {
+                            DropdownMenuItem(
+                                text = { Text(stringResource(R.string.action_edit)) },
+                                onClick = { showMenu = false; onEdit() },
+                                leadingIcon = {
+                                    Icon(Icons.Default.Edit, contentDescription = null)
+                                },
+                            )
+                            DropdownMenuItem(
+                                text = {
+                                    Text(
+                                        stringResource(R.string.action_delete),
+                                        color = MaterialTheme.colorScheme.error,
+                                    )
+                                },
+                                onClick = { showMenu = false; onDelete() },
+                                leadingIcon = {
+                                    Icon(
+                                        Icons.Default.Delete,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.error,
+                                    )
+                                },
+                            )
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(4.dp))
+
+                // Card title
+                Text(
+                    text = card.title,
+                    style = MaterialTheme.typography.bodySmall,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    maxLines = 1,
+                )
+
+                Spacer(modifier = Modifier.height(6.dp))
+
+                // Variants row
+                if (card.variants.isNotEmpty()) {
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(4.dp),
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        card.variants.take(2).forEach { variant ->
+                            val isDefault = variant.isDefault
+                            Surface(
+                                shape = RoundedCornerShape(8.dp),
+                                color = if (isDefault) {
+                                    accentColor
+                                } else {
+                                    MaterialTheme.colorScheme.surfaceVariant
+                                },
+                            ) {
+                                Text(
+                                    text = CurrencyFormatter.formatCompact(variant.amount),
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = if (isDefault) {
+                                        if (card.type == TransactionType.EXPENSE) {
+                                            MaterialTheme.colorScheme.onError
+                                        } else {
+                                            MaterialTheme.colorScheme.onTertiary
+                                        }
+                                    } else {
+                                        MaterialTheme.colorScheme.onSurfaceVariant
+                                    },
+                                    fontWeight = FontWeight.Medium,
+                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                                )
+                            }
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(8.dp))
+                } else {
+                    Spacer(modifier = Modifier.height(8.dp))
+                }
+
+                // Add button
+                Button(
+                    onClick = onTap,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(30.dp),
+                    shape = RoundedCornerShape(8.dp),
+                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.primaryContainer,
+                        contentColor = MaterialTheme.colorScheme.primary,
+                    ),
+                ) {
+                    Icon(
+                        Icons.Default.Add,
+                        contentDescription = null,
+                        modifier = Modifier.size(14.dp),
+                    )
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text(
+                        text = stringResource(R.string.action_add),
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                }
+            }
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Transaction item row
+// ---------------------------------------------------------------------------
 
 @Composable
 private fun TransactionItem(
@@ -702,19 +951,24 @@ private fun TransactionItem(
     onDelete: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    var showMenu by remember { mutableStateOf(false) }
     val isExpense = transaction.type == TransactionType.EXPENSE
-    val accentColor = if (isExpense) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.tertiary
+    val accentColor = if (isExpense) {
+        MaterialTheme.colorScheme.error
+    } else {
+        MaterialTheme.colorScheme.tertiary
+    }
 
     Box(modifier = modifier) {
         Card(
             modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(10.dp),
+            shape = RoundedCornerShape(12.dp),
             elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+            colors = CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.surface,
+            ),
         ) {
             Row(modifier = Modifier.fillMaxWidth()) {
-                // Colored left border
+                // Left accent bar
                 Box(
                     modifier = Modifier
                         .width(3.dp)
@@ -724,17 +978,18 @@ private fun TransactionItem(
                 Row(
                     modifier = Modifier
                         .weight(1f)
-                        .padding(horizontal = 12.dp, vertical = 8.dp),
+                        .padding(horizontal = 12.dp, vertical = 10.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     transaction.category?.let { cat ->
-                        CategoryIcon(icon = cat.icon, color = cat.color, size = 32.dp)
-                        Spacer(modifier = Modifier.width(8.dp))
+                        CategoryIcon(icon = cat.icon, color = cat.color, size = 36.dp)
+                        Spacer(modifier = Modifier.width(10.dp))
                     } ?: run {
                         val emoji = if (isExpense) "💸" else "💰"
-                        CategoryIcon(icon = emoji, color = "#9E9E9E", size = 32.dp)
-                        Spacer(modifier = Modifier.width(8.dp))
+                        CategoryIcon(icon = emoji, color = "#9E9E9E", size = 36.dp)
+                        Spacer(modifier = Modifier.width(10.dp))
                     }
+
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
                             text = transaction.title,
@@ -752,33 +1007,73 @@ private fun TransactionItem(
                             }
                         }
                     }
-                    Text(
-                        text = (if (isExpense) "-" else "+") + CurrencyFormatter.formatCompact(transaction.amount),
-                        style = MaterialTheme.typography.titleSmall,
-                        fontWeight = FontWeight.Bold,
-                        color = accentColor,
-                    )
-                    IconButton(onClick = { showMenu = true }) {
-                        Text("⋮", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            text = (if (isExpense) "-" else "+") +
+                                CurrencyFormatter.formatCompact(transaction.amount),
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.Bold,
+                            color = accentColor,
+                        )
+                        IconButton(
+                            onClick = onEdit,
+                            modifier = Modifier.size(32.dp),
+                        ) {
+                            Icon(
+                                Icons.Default.Edit,
+                                contentDescription = stringResource(R.string.action_edit),
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.size(16.dp),
+                            )
+                        }
+                        IconButton(
+                            onClick = onDelete,
+                            modifier = Modifier.size(32.dp),
+                        ) {
+                            Icon(
+                                Icons.Default.Delete,
+                                contentDescription = stringResource(R.string.action_delete),
+                                tint = MaterialTheme.colorScheme.error,
+                                modifier = Modifier.size(16.dp),
+                            )
+                        }
                     }
                 }
             }
         }
-
-        DropdownMenu(expanded = showMenu, onDismissRequest = { showMenu = false }) {
-            DropdownMenuItem(
-                text = { Text(stringResource(R.string.action_edit)) },
-                onClick = { showMenu = false; onEdit() },
-                leadingIcon = { Icon(Icons.Default.Edit, contentDescription = null) },
-            )
-            DropdownMenuItem(
-                text = { Text(stringResource(R.string.action_delete), color = MaterialTheme.colorScheme.error) },
-                onClick = { showMenu = false; onDelete() },
-                leadingIcon = { Icon(Icons.Default.Delete, contentDescription = null, tint = MaterialTheme.colorScheme.error) },
-            )
-        }
     }
 }
+
+// ---------------------------------------------------------------------------
+// Total footer item
+// ---------------------------------------------------------------------------
+
+@Composable
+private fun TotalItem(
+    label: String,
+    amount: Long,
+    color: Color,
+    modifier: Modifier = Modifier,
+) {
+    Column(modifier = modifier, horizontalAlignment = Alignment.CenterHorizontally) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Text(
+            text = CurrencyFormatter.formatCompact(amount),
+            style = MaterialTheme.typography.bodyMedium,
+            fontWeight = FontWeight.SemiBold,
+            color = color,
+        )
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Previews
+// ---------------------------------------------------------------------------
 
 @Preview(showBackground = true, uiMode = UI_MODE_NIGHT_NO, name = "Light")
 @Preview(showBackground = true, uiMode = UI_MODE_NIGHT_YES, name = "Dark")
@@ -786,32 +1081,78 @@ private fun TransactionItem(
 private fun DayViewPreview() {
     DragSpendTheme {
         DayView(
-            selectedDate = "2026-03-16",
+            selectedDate = "2026-03-17",
             transactions = listOf(
                 Transaction(
                     id = "1",
                     userId = "u1",
-                    date = "2026-03-16",
-                    title = "Cơm trưa",
-                    amount = 35_000,
+                    date = "2026-03-17",
+                    title = "Tiền xăng",
+                    amount = 150_000,
                     type = TransactionType.EXPENSE,
                     position = 0,
                 ),
-                Transaction(
-                    id = "2",
-                    userId = "u1",
-                    date = "2026-03-16",
-                    title = "Lương",
-                    amount = 20_000_000,
-                    type = TransactionType.INCOME,
-                    position = 1,
-                ),
             ),
-            dayTotal = com.bossxomlut.dragspend.data.model.DayTotal("2026-03-16", 20_000_000, 35_000),
+            dayTotal = com.bossxomlut.dragspend.data.model.DayTotal("2026-03-17", 0, 150_000),
             onDateChange = {},
             onEditTransaction = {},
             onDeleteTransaction = {},
             onCopyFromYesterday = {},
+        )
+    }
+}
+
+@Preview(showBackground = true, uiMode = UI_MODE_NIGHT_NO, name = "Cards Panel – Light")
+@Preview(showBackground = true, uiMode = UI_MODE_NIGHT_YES, name = "Cards Panel – Dark")
+@Composable
+private fun SpendingCardsPanelPreview() {
+    DragSpendTheme {
+        SpendingCardsPanel(
+            cards = listOf(
+                SpendingCard(
+                    id = "1",
+                    userId = "u1",
+                    title = "Ăn sáng",
+                    type = TransactionType.EXPENSE,
+                    variants = listOf(
+                        com.bossxomlut.dragspend.data.model.CardVariant(
+                            id = "v1",
+                            cardId = "1",
+                            amount = 25_000,
+                            isDefault = true,
+                        ),
+                        com.bossxomlut.dragspend.data.model.CardVariant(
+                            id = "v2",
+                            cardId = "1",
+                            amount = 35_000,
+                            isDefault = false,
+                        ),
+                    ),
+                ),
+                SpendingCard(
+                    id = "2",
+                    userId = "u1",
+                    title = "Nhậu nhẹt",
+                    type = TransactionType.EXPENSE,
+                    variants = listOf(
+                        com.bossxomlut.dragspend.data.model.CardVariant(
+                            id = "v3",
+                            cardId = "2",
+                            amount = 100_000,
+                            isDefault = true,
+                        ),
+                    ),
+                ),
+            ),
+            searchQuery = "",
+            onSearchChange = {},
+            onCardTap = {},
+            onCardEdit = {},
+            onCardDelete = {},
+            onDragStart = {},
+            onDragEnd = { _, _ -> },
+            onDragMove = {},
+            onAddCard = {},
         )
     }
 }

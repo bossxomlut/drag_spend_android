@@ -1,5 +1,6 @@
 package com.bossxomlut.dragspend.navigation
 
+import androidx.activity.compose.LocalActivityResultRegistryOwner
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
@@ -21,6 +22,7 @@ import com.bossxomlut.dragspend.ui.screen.auth.LoginScreen
 import com.bossxomlut.dragspend.ui.screen.auth.RegisterScreen
 import com.bossxomlut.dragspend.ui.screen.dashboard.DashboardScreen
 import com.bossxomlut.dragspend.ui.screen.onboarding.LanguageScreen
+import com.bossxomlut.dragspend.ui.screen.settings.SettingsScreen
 import io.github.jan.supabase.SupabaseClient
 import io.github.jan.supabase.auth.auth
 import io.github.jan.supabase.postgrest.from
@@ -79,6 +81,7 @@ fun AppNavGraph(
     }
 
     val context = LocalContext.current
+    val activityResultRegistryOwner = LocalActivityResultRegistryOwner.current
     val localizedContext = remember(selectedLanguage) {
         val locale = Locale.forLanguageTag(selectedLanguage)
         val config = Configuration(context.resources.configuration)
@@ -86,7 +89,14 @@ fun AppNavGraph(
         context.createConfigurationContext(config)
     }
 
-    CompositionLocalProvider(LocalContext provides localizedContext) {
+    CompositionLocalProvider(
+        LocalContext provides localizedContext,
+        *listOfNotNull(
+            activityResultRegistryOwner?.let {
+                LocalActivityResultRegistryOwner provides it
+            },
+        ).toTypedArray(),
+    ) {
         NavHost(
             navController = navController,
             startDestination = start,
@@ -134,6 +144,25 @@ fun AppNavGraph(
                 DashboardScreen(
                     onSignOut = {
                         navController.navigate(Route.Login.route) {
+                            popUpTo(0) { inclusive = true }
+                        }
+                    },
+                    onNavigateToSettings = {
+                        navController.navigate(Route.Settings.route)
+                    },
+                )
+            }
+
+            composable(Route.Settings.route) {
+                SettingsScreen(
+                    onDone = { navController.popBackStack() },
+                    onSignOut = {
+                        navController.navigate(Route.Login.route) {
+                            popUpTo(0) { inclusive = true }
+                        }
+                    },
+                    onAccountDeleted = {
+                        navController.navigate(Route.AccountDeleted.route) {
                             popUpTo(0) { inclusive = true }
                         }
                     },

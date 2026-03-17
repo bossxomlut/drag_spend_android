@@ -38,6 +38,7 @@ private data class DashboardTab(
 @Composable
 fun DashboardScreen(
     onSignOut: () -> Unit,
+    onNavigateToSettings: () -> Unit,
     dashboardViewModel: DashboardViewModel = koinViewModel(),
 ) {
     var selectedTab by rememberSaveable { mutableIntStateOf(0) }
@@ -97,6 +98,7 @@ fun DashboardScreen(
         when (selectedTab) {
             0 -> TodayScreen(
                 dashboardViewModel = dashboardViewModel,
+                onNavigateToSettings = onNavigateToSettings,
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(padding),

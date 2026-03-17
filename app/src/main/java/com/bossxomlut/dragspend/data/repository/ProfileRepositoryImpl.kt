@@ -42,6 +42,14 @@ class ProfileRepositoryImpl(
         Unit
     }
 
+    override suspend fun updateName(userId: String, name: String): Result<Unit> = runCatching {
+        supabase.from("profiles")
+            .update(mapOf("name" to name)) {
+                filter { eq("id", userId) }
+            }
+        Unit
+    }
+
     override suspend fun softDeleteAccount(userId: String): Result<Unit> = runCatching {
         supabase.from("profiles")
             .update(mapOf("deleted_at" to "now()")) {

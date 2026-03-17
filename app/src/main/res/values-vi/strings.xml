@@ -46,6 +46,9 @@
     <!-- Today screen -->
     <string name="placeholder_search_cards">Tìm thẻ chi tiêu…</string>
     <string name="action_new_card">Thêm thẻ</string>
+    <string name="label_spending_cards">Thẻ chi tiêu</string>
+    <string name="action_add">Thêm</string>
+    <string name="label_profile">Hồ sơ</string>
     <string name="action_copy_from_yesterday">Sao chép từ hôm qua</string>
     <string name="empty_transactions">Chưa có giao dịch. Nhấn vào thẻ để thêm.</string>
     <string name="action_previous_day">Ngày trước</string>
@@ -88,6 +91,44 @@
     <string name="account_deleted_title">Tài khoản đã được lên lịch xóa</string>
     <string name="account_deleted_message">Tài khoản của bạn đã được lên lịch xóa. Liên hệ hỗ trợ trong vòng 30 ngày để khôi phục.</string>
 
+    <!-- Settings -->
+    <string name="settings_title">Cài đặt</string>
+    <string name="settings_done">Xong</string>
+    <string name="settings_section_account">Tài khoản</string>
+    <string name="settings_section_appearance">Giao diện</string>
+    <string name="settings_section_language">Ngôn ngữ</string>
+    <string name="settings_section_reminder">Nhắc nhở</string>
+    <string name="settings_section_debug">Gỡ lỗi</string>
+    <string name="settings_theme_system">Theo hệ thống</string>
+    <string name="settings_theme_light">Sáng</string>
+    <string name="settings_theme_dark">Tối</string>
+    <string name="settings_lang_vi">Tiếng Việt</string>
+    <string name="settings_lang_en">English</string>
+    <string name="settings_lang_restart_note">Một số nội dung cần khởi động lại ứng dụng để áp dụng ngôn ngữ mới.</string>
+    <string name="settings_reminder_daily">Nhắc nhở nhập chi tiêu hàng ngày</string>
+    <string name="settings_reminder_time">Giờ nhắc nhở</string>
+    <string name="settings_send_test_notification">Gửi thông báo thử</string>
+    <string name="settings_logout">Đăng xuất</string>
+    <string name="settings_delete_account">Xóa tài khoản</string>
+    <string name="settings_delete_account_warning">Xóa tài khoản sẽ xóa vĩnh viễn tất cả dữ liệu của bạn.</string>
+    <string name="settings_logout_confirm_title">Đăng xuất?</string>
+    <string name="settings_logout_confirm_message">Bạn có chắc muốn đăng xuất không?</string>
+    <string name="settings_delete_confirm_title">Xóa tài khoản?</string>
+    <string name="settings_delete_confirm_message">Hành động này không thể hoàn tác. Toàn bộ dữ liệu của bạn sẽ bị xóa vĩnh viễn.</string>
+    <string name="settings_edit_name_title">Chỉnh sửa tên hiển thị</string>
+    <string name="settings_edit_name_hint">Tên của bạn</string>
+    <string name="notification_reminder_channel_name">Nhắc nhở hàng ngày</string>
+    <string name="notification_reminder_channel_desc">Nhắc nhở nhập chi tiêu hàng ngày</string>
+    <string name="notification_reminder_title">Đến giờ ghi chi tiêu rồi 💸</string>
+    <string name="notification_reminder_body">Đừng quên ghi lại các khoản chi của hôm nay nhé.</string>
+    <string name="label_version">Drag Spend · v%1$s</string>
+    <string name="label_unknown">Không rõ</string>
+
     <!-- Errors -->
     <string name="error_invalid_amount">Số tiền không hợp lệ (vd: 25k, 1.5m)</string>
+
+    <!-- Plurals -->
+    <plurals name="transaction_count">
+        <item quantity="other">%d giao dịch</item>
+    </plurals>
 </resources>
