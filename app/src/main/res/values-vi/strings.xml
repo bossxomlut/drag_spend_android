@@ -1,0 +1,85 @@
+<resources>
+    <string name="app_name">Drag Spend</string>
+    <string name="login_subtitle">Theo dõi chi tiêu dễ dàng</string>
+
+    <!-- Auth -->
+    <string name="label_email">Email</string>
+    <string name="label_password">Mật khẩu</string>
+    <string name="label_confirm_password">Xác nhận mật khẩu</string>
+    <string name="action_login">Đăng nhập</string>
+    <string name="action_register">Tạo tài khoản</string>
+    <string name="action_forgot_password">Quên mật khẩu?</string>
+    <string name="action_go_to_register">Chưa có tài khoản? Đăng ký</string>
+    <string name="action_go_to_login">Đã có tài khoản? Đăng nhập</string>
+    <string name="action_back_to_login">Quay lại đăng nhập</string>
+    <string name="action_send_reset_link">Gửi link đặt lại mật khẩu</string>
+    <string name="action_sign_out">Đăng xuất</string>
+    <string name="action_back">Quay lại</string>
+    <string name="action_confirm">Xác nhận</string>
+    <string name="action_cancel">Hủy</string>
+    <string name="action_save">Lưu</string>
+    <string name="action_delete">Xóa</string>
+    <string name="action_edit">Chỉnh sửa</string>
+    <string name="register_title">Tạo tài khoản</string>
+    <string name="register_check_email_title">Kiểm tra email</string>
+    <string name="register_check_email_body">Chúng tôi đã gửi link xác nhận đến email của bạn. Vui lòng xác thực tài khoản trước khi đăng nhập.</string>
+    <string name="forgot_password_title">Quên mật khẩu</string>
+    <string name="forgot_password_description">Nhập địa chỉ email của bạn và chúng tôi sẽ gửi link để đặt lại mật khẩu.</string>
+    <string name="forgot_password_sent">Đã gửi link đặt lại! Kiểm tra hộp thư email của bạn.</string>
+    <string name="error_passwords_do_not_match">Mật khẩu không khớp</string>
+
+    <!-- Onboarding -->
+    <string name="onboarding_select_language">Chọn ngôn ngữ của bạn</string>
+
+    <!-- Dashboard tabs -->
+    <string name="tab_today">Hôm nay</string>
+    <string name="tab_report">Báo cáo</string>
+
+    <!-- Today screen -->
+    <string name="placeholder_search_cards">Tìm thẻ chi tiêu…</string>
+    <string name="action_new_card">Thêm thẻ</string>
+    <string name="action_copy_from_yesterday">Sao chép từ hôm qua</string>
+    <string name="empty_transactions">Chưa có giao dịch. Nhấn vào thẻ để thêm.</string>
+    <string name="action_previous_day">Ngày trước</string>
+    <string name="action_next_day">Ngày sau</string>
+
+    <!-- Transaction labels -->
+    <string name="type_expense">Chi tiêu</string>
+    <string name="type_income">Thu nhập</string>
+    <string name="label_title">Tiêu đề</string>
+    <string name="label_amount">Số tiền</string>
+    <string name="label_note">Ghi chú</string>
+    <string name="label_income">Thu nhập</string>
+    <string name="label_expense">Chi tiêu</string>
+    <string name="label_net">Còn lại</string>
+    <string name="label_variants">Mức giá</string>
+    <string name="label_variant_label">Nhãn</string>
+    <string name="edit_transaction_title">Chỉnh sửa giao dịch</string>
+    <string name="delete_transaction_title">Xóa giao dịch</string>
+    <string name="delete_transaction_message">Bạn có chắc muốn xóa giao dịch này không?</string>
+
+    <!-- Card labels -->
+    <string name="create_card_title">Thêm thẻ mới</string>
+    <string name="edit_card_title">Chỉnh sửa thẻ</string>
+    <string name="delete_card_title">Xóa thẻ</string>
+    <string name="delete_card_message">Bạn có chắc muốn xóa thẻ này không? Các giao dịch hiện tại sẽ không bị xóa.</string>
+    <string name="action_add_variant">Thêm mức giá</string>
+
+    <!-- Report -->
+    <string name="report_daily_chart_title">Chi tiêu theo ngày</string>
+    <string name="report_category_chart_title">Theo danh mục</string>
+    <string name="report_total_expense">Tổng chi tiêu</string>
+    <string name="report_total_income">Tổng thu nhập</string>
+    <string name="report_avg_daily">Chi tiêu TB/ngày</string>
+    <string name="report_highest_day">Ngày chi nhiều nhất</string>
+    <string name="report_empty">Không có dữ liệu tháng này</string>
+    <string name="action_previous_month">Tháng trước</string>
+    <string name="action_next_month">Tháng sau</string>
+
+    <!-- Account deleted -->
+    <string name="account_deleted_title">Tài khoản đã được lên lịch xóa</string>
+    <string name="account_deleted_message">Tài khoản của bạn đã được lên lịch xóa. Liên hệ hỗ trợ trong vòng 30 ngày để khôi phục.</string>
+
+    <!-- Errors -->
+    <string name="error_invalid_amount">Số tiền không hợp lệ (vd: 25k, 1.5m)</string>
+</resources>

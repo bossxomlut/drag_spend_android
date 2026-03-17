@@ -1,3 +1,85 @@
 <resources>
     <string name="app_name">Drag Spend</string>
+    <string name="login_subtitle">Track your spending beautifully</string>
+
+    <!-- Auth -->
+    <string name="label_email">Email</string>
+    <string name="label_password">Password</string>
+    <string name="label_confirm_password">Confirm Password</string>
+    <string name="action_login">Log In</string>
+    <string name="action_register">Create Account</string>
+    <string name="action_forgot_password">Forgot password?</string>
+    <string name="action_go_to_register">Don\'t have an account? Register</string>
+    <string name="action_go_to_login">Already have an account? Log In</string>
+    <string name="action_back_to_login">Back to Login</string>
+    <string name="action_send_reset_link">Send Reset Link</string>
+    <string name="action_sign_out">Sign Out</string>
+    <string name="action_back">Back</string>
+    <string name="action_confirm">Confirm</string>
+    <string name="action_cancel">Cancel</string>
+    <string name="action_save">Save</string>
+    <string name="action_delete">Delete</string>
+    <string name="action_edit">Edit</string>
+    <string name="register_title">Create Account</string>
+    <string name="register_check_email_title">Check your email</string>
+    <string name="register_check_email_body">We\'ve sent a confirmation link to your email. Please verify your account before logging in.</string>
+    <string name="forgot_password_title">Forgot Password</string>
+    <string name="forgot_password_description">Enter your email address and we\'ll send you a link to reset your password.</string>
+    <string name="forgot_password_sent">Reset link sent! Check your email inbox.</string>
+    <string name="error_passwords_do_not_match">Passwords do not match</string>
+
+    <!-- Onboarding -->
+    <string name="onboarding_select_language">Choose your language</string>
+
+    <!-- Dashboard tabs -->
+    <string name="tab_today">Today</string>
+    <string name="tab_report">Report</string>
+
+    <!-- Today screen -->
+    <string name="placeholder_search_cards">Search cards…</string>
+    <string name="action_new_card">New Card</string>
+    <string name="action_copy_from_yesterday">Copy from yesterday</string>
+    <string name="empty_transactions">No transactions yet. Tap a card to add one.</string>
+    <string name="action_previous_day">Previous day</string>
+    <string name="action_next_day">Next day</string>
+
+    <!-- Transaction labels -->
+    <string name="type_expense">Expense</string>
+    <string name="type_income">Income</string>
+    <string name="label_title">Title</string>
+    <string name="label_amount">Amount</string>
+    <string name="label_note">Note</string>
+    <string name="label_income">Income</string>
+    <string name="label_expense">Expense</string>
+    <string name="label_net">Net</string>
+    <string name="label_variants">Price options</string>
+    <string name="label_variant_label">Label</string>
+    <string name="edit_transaction_title">Edit Transaction</string>
+    <string name="delete_transaction_title">Delete Transaction</string>
+    <string name="delete_transaction_message">Are you sure you want to delete this transaction?</string>
+
+    <!-- Card labels -->
+    <string name="create_card_title">New Card</string>
+    <string name="edit_card_title">Edit Card</string>
+    <string name="delete_card_title">Delete Card</string>
+    <string name="delete_card_message">Are you sure you want to delete this card? Existing transactions will not be deleted.</string>
+    <string name="action_add_variant">Add price option</string>
+
+    <!-- Report -->
+    <string name="report_daily_chart_title">Daily spending</string>
+    <string name="report_category_chart_title">By category</string>
+    <string name="report_total_expense">Total Expense</string>
+    <string name="report_total_income">Total Income</string>
+    <string name="report_avg_daily">Avg. Daily Expense</string>
+    <string name="report_highest_day">Highest Single Day</string>
+    <string name="report_empty">No data for this month</string>
+    <string name="action_previous_month">Previous month</string>
+    <string name="action_next_month">Next month</string>
+
+    <!-- Account deleted -->
+    <string name="account_deleted_title">Account Scheduled for Deletion</string>
+    <string name="account_deleted_message">Your account has been scheduled for deletion. Contact support within 30 days to recover it.</string>
+
+    <!-- Errors -->
+    <string name="error_invalid_amount">Invalid amount (e.g. 25k, 1.5m)</string>
 </resources>

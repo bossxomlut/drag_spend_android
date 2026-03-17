@@ -1,0 +1,43 @@
+package com.bossxomlut.dragspend.ui.screen.onboarding
+
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
+import com.bossxomlut.dragspend.domain.repository.ProfileRepository
+import com.bossxomlut.dragspend.util.toFriendlyMessage
+import io.github.jan.supabase.SupabaseClient
+import io.github.jan.supabase.auth.auth
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.launch
+
+sealed interface OnboardingUiState {
+    data object Idle : OnboardingUiState
+    data object Loading : OnboardingUiState
+    data object Done : OnboardingUiState
+    data class Error(val message: String) : OnboardingUiState
+}
+
+
+class OnboardingViewModel(
+    private val supabase: SupabaseClient,
+    private val profileRepository: ProfileRepository,
+) : ViewModel() {
+
+    private val _uiState = MutableStateFlow<OnboardingUiState>(OnboardingUiState.Idle)
+    val uiState: StateFlow<OnboardingUiState> = _uiState.asStateFlow()
+
+    fun selectLanguage(language: String) {
+        viewModelScope.launch {
+            _uiState.value = OnboardingUiState.Loading
+            val userId = supabase.auth.currentUserOrNull()?.id
+            if (userId == null) {
+                _uiState.value = OnboardingUiState.Error("Not authenticated")
+                return@launch
+            }
+            profileRepository.ensureUserSeeded(userId = userId, name = null, language = language)
+                .onSuccess { _uiState.value = OnboardingUiState.Done }
+                .onFailure { e -> _uiState.value = OnboardingUiState.Error(e.toFriendlyMessage()) }
+        }
+    }
+}
