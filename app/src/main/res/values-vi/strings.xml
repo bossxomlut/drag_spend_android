@@ -1,6 +1,6 @@
 <resources>
     <string name="app_name">Drag Spend</string>
-    <string name="login_subtitle">Theo dõi chi tiêu dễ dàng</string>
+    <string name="login_subtitle">Theo dõi chi tiêu thông minh</string>
 
     <!-- Auth -->
     <string name="label_email">Email</string>
@@ -10,6 +10,8 @@
     <string name="action_register">Tạo tài khoản</string>
     <string name="action_forgot_password">Quên mật khẩu?</string>
     <string name="action_go_to_register">Chưa có tài khoản? Đăng ký</string>
+    <string name="login_no_account">Chưa có tài khoản?</string>
+    <string name="action_sign_up">Đăng ký</string>
     <string name="action_go_to_login">Đã có tài khoản? Đăng nhập</string>
     <string name="action_back_to_login">Quay lại đăng nhập</string>
     <string name="action_send_reset_link">Gửi link đặt lại mật khẩu</string>
@@ -21,12 +23,18 @@
     <string name="action_delete">Xóa</string>
     <string name="action_edit">Chỉnh sửa</string>
     <string name="register_title">Tạo tài khoản</string>
+    <string name="register_subtitle">Bắt đầu theo dõi chi tiêu hôm nay</string>
     <string name="register_check_email_title">Kiểm tra email</string>
     <string name="register_check_email_body">Chúng tôi đã gửi link xác nhận đến email của bạn. Vui lòng xác thực tài khoản trước khi đăng nhập.</string>
     <string name="forgot_password_title">Quên mật khẩu</string>
     <string name="forgot_password_description">Nhập địa chỉ email của bạn và chúng tôi sẽ gửi link để đặt lại mật khẩu.</string>
     <string name="forgot_password_sent">Đã gửi link đặt lại! Kiểm tra hộp thư email của bạn.</string>
     <string name="error_passwords_do_not_match">Mật khẩu không khớp</string>
+    <string name="label_your_name">Họ tên</string>
+    <string name="action_close">Đóng</string>
+    <string name="password_placeholder">Ít nhất 6 ký tự</string>
+    <string name="confirm_password_placeholder">Nhập lại mật khẩu</string>
+    <string name="forgot_password_heading">Đặt lại mật khẩu</string>
 
     <!-- Onboarding -->
     <string name="onboarding_select_language">Chọn ngôn ngữ của bạn</string>

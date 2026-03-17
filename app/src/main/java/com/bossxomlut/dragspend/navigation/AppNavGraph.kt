@@ -1,12 +1,16 @@
 package com.bossxomlut.dragspend.navigation
 
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
+import android.content.res.Configuration
+import java.util.Locale
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -36,6 +40,7 @@ fun AppNavGraph(
     modifier: Modifier = Modifier,
 ) {
     var startDestination by remember { mutableStateOf(StartDestination.CHECKING) }
+    var selectedLanguage by remember { mutableStateOf("en") }
 
     LaunchedEffect(Unit) {
         val session = supabase.auth.currentSessionOrNull()
@@ -73,12 +78,21 @@ fun AppNavGraph(
         StartDestination.CHECKING -> Route.Login.route
     }
 
-    NavHost(
-        navController = navController,
-        startDestination = start,
-        modifier = modifier,
-    ) {
-        composable(Route.Login.route) {
+    val context = LocalContext.current
+    val localizedContext = remember(selectedLanguage) {
+        val locale = Locale.forLanguageTag(selectedLanguage)
+        val config = Configuration(context.resources.configuration)
+        config.setLocale(locale)
+        context.createConfigurationContext(config)
+    }
+
+    CompositionLocalProvider(LocalContext provides localizedContext) {
+        NavHost(
+            navController = navController,
+            startDestination = start,
+            modifier = modifier,
+        ) {
+            composable(Route.Login.route) {
             LoginScreen(
                 onLoginSuccess = {
                     navController.navigate(Route.Dashboard.route) {
@@ -87,49 +101,54 @@ fun AppNavGraph(
                 },
                 onNavigateToRegister = { navController.navigate(Route.Register.route) },
                 onNavigateToForgotPassword = { navController.navigate(Route.ForgotPassword.route) },
+                selectedLanguage = selectedLanguage,
+                onLanguageSelected = { selectedLanguage = it },
             )
-        }
+            }
 
-        composable(Route.Register.route) {
-            RegisterScreen(
-                onNavigateToLogin = { navController.popBackStack() },
-            )
-        }
+            composable(Route.Register.route) {
+                RegisterScreen(
+                    onNavigateToLogin = { navController.popBackStack() },
+                    selectedLanguage = selectedLanguage,
+                    onLanguageSelected = { selectedLanguage = it },
+                )
+            }
 
-        composable(Route.ForgotPassword.route) {
-            ForgotPasswordScreen(
-                onNavigateBack = { navController.popBackStack() },
-            )
-        }
+            composable(Route.ForgotPassword.route) {
+                ForgotPasswordScreen(
+                    onNavigateBack = { navController.popBackStack() },
+                )
+            }
 
-        composable(Route.Onboarding.route) {
-            LanguageScreen(
-                onOnboardingComplete = {
-                    navController.navigate(Route.Dashboard.route) {
-                        popUpTo(Route.Onboarding.route) { inclusive = true }
-                    }
-                },
-            )
-        }
+            composable(Route.Onboarding.route) {
+                LanguageScreen(
+                    onOnboardingComplete = {
+                        navController.navigate(Route.Dashboard.route) {
+                            popUpTo(Route.Onboarding.route) { inclusive = true }
+                        }
+                    },
+                )
+            }
 
-        composable(Route.Dashboard.route) {
-            DashboardScreen(
-                onSignOut = {
-                    navController.navigate(Route.Login.route) {
-                        popUpTo(0) { inclusive = true }
-                    }
-                },
-            )
-        }
+            composable(Route.Dashboard.route) {
+                DashboardScreen(
+                    onSignOut = {
+                        navController.navigate(Route.Login.route) {
+                            popUpTo(0) { inclusive = true }
+                        }
+                    },
+                )
+            }
 
-        composable(Route.AccountDeleted.route) {
-            AccountDeletedScreen(
-                onSignOut = {
-                    navController.navigate(Route.Login.route) {
-                        popUpTo(0) { inclusive = true }
-                    }
-                },
-            )
+            composable(Route.AccountDeleted.route) {
+                AccountDeletedScreen(
+                    onSignOut = {
+                        navController.navigate(Route.Login.route) {
+                            popUpTo(0) { inclusive = true }
+                        }
+                    },
+                )
+            }
         }
     }
 }

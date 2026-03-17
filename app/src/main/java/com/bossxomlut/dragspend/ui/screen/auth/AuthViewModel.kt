@@ -7,6 +7,8 @@ import com.bossxomlut.dragspend.util.toFriendlyMessage
 import io.github.jan.supabase.SupabaseClient
 import io.github.jan.supabase.auth.auth
 import io.github.jan.supabase.auth.providers.builtin.Email
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -45,13 +47,16 @@ class AuthViewModel(
         }
     }
 
-    fun register(email: String, password: String) {
+    fun register(name: String, email: String, password: String) {
         viewModelScope.launch {
             _uiState.value = AuthUiState.Loading
             runCatching {
                 supabase.auth.signUpWith(Email) {
                     this.email = email
                     this.password = password
+                    data = buildJsonObject {
+                        put("name", name.trim())
+                    }
                 }
             }.onSuccess {
                 _uiState.value = AuthUiState.EmailConfirmationPending

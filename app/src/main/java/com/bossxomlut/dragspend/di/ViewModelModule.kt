@@ -5,7 +5,7 @@ import com.bossxomlut.dragspend.ui.screen.dashboard.DashboardViewModel
 import com.bossxomlut.dragspend.ui.screen.dashboard.report.ReportViewModel
 import com.bossxomlut.dragspend.ui.screen.dashboard.today.TodayViewModel
 import com.bossxomlut.dragspend.ui.screen.onboarding.OnboardingViewModel
-import org.koin.androidx.viewmodel.dsl.viewModel
+import org.koin.core.module.dsl.viewModel
 import org.koin.dsl.module
 
 val viewModelModule = module {
