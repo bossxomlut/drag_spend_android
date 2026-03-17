@@ -45,6 +45,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
@@ -179,6 +181,9 @@ private fun RegisterContent(
             password.isNotBlank() && confirmPassword == password
 
     val focusManager = LocalFocusManager.current
+    val emailFocusRequester = remember { FocusRequester() }
+    val passwordFocusRequester = remember { FocusRequester() }
+    val confirmPasswordFocusRequester = remember { FocusRequester() }
 
     Column(
         modifier = modifier
@@ -257,6 +262,9 @@ private fun RegisterContent(
                             capitalization = KeyboardCapitalization.Words,
                             imeAction = ImeAction.Next,
                         ),
+                        keyboardActions = KeyboardActions(
+                            onNext = { emailFocusRequester.requestFocus() },
+                        ),
                         modifier = Modifier.fillMaxWidth(),
                     )
 
@@ -279,7 +287,12 @@ private fun RegisterContent(
                             keyboardType = KeyboardType.Email,
                             imeAction = ImeAction.Next,
                         ),
-                        modifier = Modifier.fillMaxWidth(),
+                        keyboardActions = KeyboardActions(
+                            onNext = { passwordFocusRequester.requestFocus() },
+                        ),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .focusRequester(emailFocusRequester),
                     )
 
                     Spacer(modifier = Modifier.height(16.dp))
@@ -302,7 +315,12 @@ private fun RegisterContent(
                             keyboardType = KeyboardType.Password,
                             imeAction = ImeAction.Next,
                         ),
-                        modifier = Modifier.fillMaxWidth(),
+                        keyboardActions = KeyboardActions(
+                            onNext = { confirmPasswordFocusRequester.requestFocus() },
+                        ),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .focusRequester(passwordFocusRequester),
                     )
 
                     Spacer(modifier = Modifier.height(16.dp))
@@ -336,9 +354,14 @@ private fun RegisterContent(
                             imeAction = ImeAction.Done,
                         ),
                         keyboardActions = KeyboardActions(
-                            onDone = { if (canSubmit) onRegister(name, email, password) },
+                            onDone = {
+                                focusManager.clearFocus()
+                                if (canSubmit) onRegister(name, email, password)
+                            },
                         ),
-                        modifier = Modifier.fillMaxWidth(),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .focusRequester(confirmPasswordFocusRequester),
                     )
 
                     Spacer(modifier = Modifier.height(24.dp))

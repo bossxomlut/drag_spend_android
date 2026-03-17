@@ -238,7 +238,10 @@ private fun ForgotPasswordContent(
                             imeAction = ImeAction.Done,
                         ),
                         keyboardActions = KeyboardActions(
-                            onDone = { if (email.isNotBlank() && !isLoading) onSendReset(email) },
+                            onDone = {
+                                focusManager.clearFocus()
+                                if (email.isNotBlank() && !isLoading) onSendReset(email)
+                            },
                         ),
                         modifier = Modifier.fillMaxWidth(),
                     )

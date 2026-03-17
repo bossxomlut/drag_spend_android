@@ -43,6 +43,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
@@ -120,6 +122,7 @@ private fun LoginContent(
     var email by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
     val focusManager = LocalFocusManager.current
+    val passwordFocusRequester = remember { FocusRequester() }
 
     Column(
         modifier = modifier
@@ -202,6 +205,9 @@ private fun LoginContent(
                         keyboardType = KeyboardType.Email,
                         imeAction = ImeAction.Next,
                     ),
+                    keyboardActions = KeyboardActions(
+                        onNext = { passwordFocusRequester.requestFocus() },
+                    ),
                     modifier = Modifier.fillMaxWidth(),
                 )
 
@@ -239,8 +245,15 @@ private fun LoginContent(
                         keyboardType = KeyboardType.Password,
                         imeAction = ImeAction.Done,
                     ),
-                    keyboardActions = KeyboardActions(onDone = { onLogin(email, password) }),
-                    modifier = Modifier.fillMaxWidth(),
+                    keyboardActions = KeyboardActions(
+                        onDone = {
+                            focusManager.clearFocus()
+                            onLogin(email, password)
+                        },
+                    ),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .focusRequester(passwordFocusRequester),
                 )
 
                 Spacer(modifier = Modifier.height(24.dp))
