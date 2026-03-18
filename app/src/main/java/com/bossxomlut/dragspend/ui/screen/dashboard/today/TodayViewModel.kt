@@ -1,5 +1,7 @@
 package com.bossxomlut.dragspend.ui.screen.dashboard.today
 
+import android.os.Build
+import androidx.annotation.RequiresApi
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.bossxomlut.dragspend.data.model.DayTotal
@@ -49,6 +51,7 @@ class TodayViewModel(
     private val _uiState = MutableStateFlow(TodayUiState())
     val uiState: StateFlow<TodayUiState> = _uiState.asStateFlow()
 
+    @RequiresApi(Build.VERSION_CODES.O)
     private val dateFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd")
     private val currentUserId get() = supabase.auth.currentUserOrNull()?.id
 
@@ -90,9 +93,8 @@ class TodayViewModel(
         }
     }
 
-    fun addTransactionFromCard(card: SpendingCard, date: String) {
+    fun addTransactionFromCard(card: SpendingCard, date: String, amount: Long = card.defaultAmount) {
         val userId = currentUserId ?: return
-        val amount = card.defaultAmount
         AppLog.d(AppLog.Feature.TRANSACTION, "addTransactionFromCard", "cardId=${card.id}, title=${card.title}, amount=$amount, date=$date")
         if (amount <= 0L) {
             _uiState.update {
@@ -157,6 +159,7 @@ class TodayViewModel(
         }
     }
 
+    @RequiresApi(Build.VERSION_CODES.O)
     fun copyFromYesterday(date: String) {
         val userId = currentUserId ?: return
         val yesterday = LocalDate.parse(date, dateFormatter).minusDays(1).format(dateFormatter)

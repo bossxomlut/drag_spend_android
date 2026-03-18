@@ -2,9 +2,11 @@ package com.bossxomlut.dragspend.ui.screen.dashboard.today
 
 import android.content.res.Configuration.UI_MODE_NIGHT_NO
 import android.content.res.Configuration.UI_MODE_NIGHT_YES
+import android.os.Build
+import androidx.annotation.RequiresApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
+import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -72,6 +74,13 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
+import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.res.pluralStringResource
@@ -113,6 +122,7 @@ import kotlin.math.roundToInt
 // Root screen
 // ---------------------------------------------------------------------------
 
+@RequiresApi(Build.VERSION_CODES.O)
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun TodayScreen(
@@ -127,9 +137,11 @@ fun TodayScreen(
     var toastMessage by remember { mutableStateOf<String?>(null) }
     val userId = dashboardViewModel.currentUserId ?: ""
     val language = "vi"
+    var addedCardIds by remember { mutableStateOf(setOf<String>()) }
 
     LaunchedEffect(selectedDate) {
         todayViewModel.loadData(selectedDate)
+        addedCardIds = setOf()
     }
 
     LaunchedEffect(uiState.errorMessage) {
@@ -144,21 +156,43 @@ fun TodayScreen(
     var editTransaction by remember { mutableStateOf<Transaction?>(null) }
     var deleteCardId by remember { mutableStateOf<String?>(null) }
     var deleteTransactionId by remember { mutableStateOf<String?>(null) }
+    var deleteTransactionSourceCardId by remember { mutableStateOf<String?>(null) }
     var searchQuery by remember { mutableStateOf("") }
 
-    val filteredCards by remember(uiState.cards, searchQuery) {
+    val filteredCards by remember {
         derivedStateOf {
-            if (searchQuery.isBlank()) uiState.cards
+            val base = if (searchQuery.isBlank()) uiState.cards
             else uiState.cards.filter { it.title.contains(searchQuery, ignoreCase = true) }
+            base.filter { it.id !in addedCardIds }
         }
     }
 
     // Drag state
     var draggingCard by remember { mutableStateOf<SpendingCard?>(null) }
     var dragOffset by remember { mutableStateOf(Offset.Zero) }
+    var dragStartOffset by remember { mutableStateOf(Offset.Zero) }
+    var draggingAmount by remember { mutableStateOf(0L) }
+    var boxRootOrigin by remember { mutableStateOf(Offset.Zero) }
     var dayViewBounds by remember { mutableStateOf<androidx.compose.ui.geometry.Rect?>(null) }
 
-    Box(modifier = modifier) {
+    fun isInDropZone(offset: Offset): Boolean {
+        val bounds = dayViewBounds ?: return false
+        val dropZone = bounds.copy(bottom = bounds.top + bounds.height / 2)
+        return dropZone.contains(offset)
+    }
+
+    val isDragOverDropArea by remember {
+        derivedStateOf {
+            if (draggingCard == null) false
+            else isInDropZone(dragStartOffset + dragOffset)
+        }
+    }
+
+    Box(
+        modifier = modifier.onGloballyPositioned { coords ->
+            boxRootOrigin = coords.boundsInRoot().topLeft
+        },
+    ) {
         val bottomSheetScaffoldState = rememberBottomSheetScaffoldState(
             bottomSheetState = rememberStandardBottomSheetState(
                 initialValue = SheetValue.PartiallyExpanded,
@@ -274,19 +308,28 @@ fun TodayScreen(
                     cards = filteredCards,
                     searchQuery = searchQuery,
                     onSearchChange = { searchQuery = it },
-                    onCardTap = { card ->
-                        todayViewModel.addTransactionFromCard(card, selectedDate)
+                    onCardAdd = { card, amount ->
+                        todayViewModel.addTransactionFromCard(card, selectedDate, amount)
+                        addedCardIds = addedCardIds + card.id
                     },
                     onCardEdit = { editCard = it },
                     onCardDelete = { deleteCardId = it.id },
-                    onDragStart = { card -> draggingCard = card },
-                    onDragEnd = { card, offset ->
-                        val bounds = dayViewBounds
-                        if (bounds != null && bounds.contains(offset)) {
-                            todayViewModel.addTransactionFromCard(card, selectedDate)
+                    onDragStart = { card, startOffset, amount ->
+                        draggingCard = card
+                        dragStartOffset = startOffset
+                        draggingAmount = amount
+                        dragOffset = Offset.Zero
+                    },
+                    onDragEnd = { card ->
+                        val finalOffset = dragStartOffset + dragOffset
+                        if (isInDropZone(finalOffset)) {
+                            todayViewModel.addTransactionFromCard(card, selectedDate, draggingAmount)
+                            addedCardIds = addedCardIds + card.id
                         }
                         draggingCard = null
                         dragOffset = Offset.Zero
+                        dragStartOffset = Offset.Zero
+                        draggingAmount = 0L
                     },
                     onDragMove = { delta -> dragOffset += delta },
                     onAddCard = { showCreateCard = true },
@@ -300,8 +343,13 @@ fun TodayScreen(
                 dayTotal = uiState.dayTotal,
                 onDateChange = { dashboardViewModel.selectDate(it) },
                 onEditTransaction = { editTransaction = it },
-                onDeleteTransaction = { deleteTransactionId = it.id },
+                onDeleteTransaction = {
+                        deleteTransactionId = it.id
+                        deleteTransactionSourceCardId = it.sourceCardId
+                    },
                 onCopyFromYesterday = { todayViewModel.copyFromYesterday(selectedDate) },
+                isDragging = draggingCard != null,
+                isDragOver = isDragOverDropArea,
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(sheetPadding)
@@ -313,20 +361,50 @@ fun TodayScreen(
 
         // Floating drag ghost
         if (draggingCard != null) {
+            val ghostCard = draggingCard!!
+            val ghostAccent = if (ghostCard.type == TransactionType.EXPENSE) {
+                MaterialTheme.colorScheme.error
+            } else {
+                MaterialTheme.colorScheme.tertiary
+            }
             Surface(
-                shape = RoundedCornerShape(10.dp),
-                tonalElevation = 8.dp,
-                shadowElevation = 8.dp,
+                shape = RoundedCornerShape(12.dp),
+                color = MaterialTheme.colorScheme.surface,
+                tonalElevation = 12.dp,
+                shadowElevation = 12.dp,
+                border = androidx.compose.foundation.BorderStroke(1.5.dp, ghostAccent),
                 modifier = Modifier
-                    .offset { IntOffset(dragOffset.x.roundToInt(), dragOffset.y.roundToInt()) }
+                    .offset {
+                        val pos = dragStartOffset - boxRootOrigin + dragOffset
+                        IntOffset(pos.x.roundToInt(), pos.y.roundToInt())
+                    }
                     .padding(8.dp),
             ) {
-                Text(
-                    text = draggingCard!!.title,
-                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
-                    style = MaterialTheme.typography.bodyMedium,
-                    fontWeight = FontWeight.SemiBold,
-                )
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
+                ) {
+                    ghostCard.category?.let { cat ->
+                        CategoryIcon(icon = cat.icon, color = cat.color, size = 20.dp)
+                        Spacer(modifier = Modifier.width(8.dp))
+                    }
+                    Column {
+                        Text(
+                            text = ghostCard.title,
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.SemiBold,
+                            color = MaterialTheme.colorScheme.onSurface,
+                        )
+                        if (draggingAmount > 0L) {
+                            Text(
+                                text = CurrencyFormatter.formatCompact(draggingAmount),
+                                style = MaterialTheme.typography.labelMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = ghostAccent,
+                            )
+                        }
+                    }
+                }
             }
         }
 
@@ -401,9 +479,16 @@ fun TodayScreen(
             confirmLabel = stringResource(R.string.action_delete),
             onConfirm = {
                 todayViewModel.deleteTransaction(id)
+                deleteTransactionSourceCardId?.let { cardId ->
+                    addedCardIds = addedCardIds - cardId
+                }
                 deleteTransactionId = null
+                deleteTransactionSourceCardId = null
             },
-            onDismiss = { deleteTransactionId = null },
+            onDismiss = {
+                deleteTransactionId = null
+                deleteTransactionSourceCardId = null
+            },
             isDestructive = true,
         )
     }
@@ -413,6 +498,7 @@ fun TodayScreen(
 // Day view — date navigation header + transaction list
 // ---------------------------------------------------------------------------
 
+@RequiresApi(Build.VERSION_CODES.O)
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun DayView(
@@ -423,6 +509,8 @@ private fun DayView(
     onEditTransaction: (Transaction) -> Unit,
     onDeleteTransaction: (Transaction) -> Unit,
     onCopyFromYesterday: () -> Unit,
+    isDragging: Boolean = false,
+    isDragOver: Boolean = false,
     modifier: Modifier = Modifier,
 ) {
     val dateFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd")
@@ -430,711 +518,796 @@ private fun DayView(
     val isToday = today == LocalDate.now()
     var showDatePicker by remember { mutableStateOf(false) }
 
-    Column(modifier = modifier) {
-        // ── Date navigation header ─────────────────────────────────────────
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 4.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            IconButton(
-                onClick = { onDateChange(today.minusDays(1).format(dateFormatter)) },
-            ) {
-                Icon(
-                    imageVector = Icons.AutoMirrored.Filled.KeyboardArrowLeft,
-                    contentDescription = stringResource(R.string.action_previous_day),
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-
-            Column(
-                modifier = Modifier
-                    .weight(1f)
-                    .clip(RoundedCornerShape(8.dp))
-                    .clickable { showDatePicker = true }
-                    .padding(horizontal = 8.dp, vertical = 4.dp),
-                horizontalAlignment = Alignment.CenterHorizontally,
-            ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        text = today.dayOfWeek.getDisplayName(
-                            TextStyle.FULL,
-                            Locale.getDefault(),
-                        ),
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onBackground,
-                    )
-                    if (isToday) {
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Surface(
-                            shape = RoundedCornerShape(20.dp),
-                            color = MaterialTheme.colorScheme.primary,
-                        ) {
-                            Text(
-                                text = stringResource(R.string.tab_today),
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onPrimary,
-                                fontWeight = FontWeight.SemiBold,
-                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
-                            )
-                        }
-                    }
-                }
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        text = today.format(DateTimeFormatter.ofPattern("d MMMM yyyy", Locale.getDefault())),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Icon(
-                        imageVector = Icons.Default.CalendarToday,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(12.dp),
-                    )
-                }
-            }
-
-            IconButton(
-                onClick = { onDateChange(today.plusDays(1).format(dateFormatter)) },
-            ) {
-                Icon(
-                    imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
-                    contentDescription = stringResource(R.string.action_next_day),
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-        }
-
-        // ── Day summary row ────────────────────────────────────────────────
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 2.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            // Expense total badge
-            Surface(
-                shape = RoundedCornerShape(6.dp),
-                color = MaterialTheme.colorScheme.errorContainer,
-            ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-                ) {
-                    Icon(
-                        imageVector = Icons.AutoMirrored.Filled.TrendingDown,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.error,
-                        modifier = Modifier.size(14.dp),
-                    )
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Text(
-                        text = "-${CurrencyFormatter.formatCompact(dayTotal.expense)}",
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.error,
-                        fontWeight = FontWeight.Bold,
-                    )
-                }
-            }
-            Spacer(modifier = Modifier.width(10.dp))
-            Text(
-                text = "-${dayTotal.expense}",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.error,
-                fontWeight = FontWeight.SemiBold,
-            )
-            Spacer(modifier = Modifier.width(8.dp))
-            Text(
-                text = "· ${
-                    pluralStringResource(
-                        id = R.plurals.transaction_count,
-                        count = transactions.size,
-                        transactions.size,
-                    )
-                }",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
-
-        HorizontalDivider(
-            modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
-            color = MaterialTheme.colorScheme.outlineVariant,
-        )
-
-        // ── Transaction list ───────────────────────────────────────────────
-        LazyColumn(
-            modifier = Modifier.weight(1f),
-            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
-            verticalArrangement = Arrangement.spacedBy(6.dp),
-        ) {
-            items(transactions, key = { it.id }) { transaction ->
-                TransactionItem(
-                    transaction = transaction,
-                    onEdit = { onEditTransaction(transaction) },
-                    onDelete = { onDeleteTransaction(transaction) },
-                )
-            }
-
-            if (transactions.isEmpty()) {
-                item {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(100.dp),
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        Text(
-                            text = stringResource(R.string.empty_transactions),
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            textAlign = TextAlign.Center,
-                        )
-                    }
-                }
-            }
-
-            if (transactions.isEmpty()) {
-                item {
-                    TextButton(
-                        onClick = onCopyFromYesterday,
-                        modifier = Modifier.fillMaxWidth(),
-                    ) {
-                        Icon(
-                            Icons.Default.ContentCopy,
-                            contentDescription = null,
-                            modifier = Modifier.size(16.dp),
-                        )
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text(stringResource(R.string.action_copy_from_yesterday))
-                    }
-                }
-            }
-        }
-
-    }
-
-    if (showDatePicker) {
-        val datePickerState = rememberDatePickerState(
-            initialSelectedDateMillis = today
-                .atStartOfDay(ZoneOffset.UTC)
-                .toInstant()
-                .toEpochMilli(),
-        )
-        DatePickerDialog(
-            onDismissRequest = { showDatePicker = false },
-            confirmButton = {
-                TextButton(onClick = {
-                    datePickerState.selectedDateMillis?.let { millis ->
-                        val selected = Instant.ofEpochMilli(millis)
-                            .atZone(ZoneOffset.UTC)
-                            .toLocalDate()
-                        onDateChange(selected.format(dateFormatter))
-                    }
-                    showDatePicker = false
-                }) {
-                    Text(stringResource(R.string.action_confirm))
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { showDatePicker = false }) {
-                    Text(stringResource(R.string.action_cancel))
-                }
-            },
-        ) {
-            DatePicker(state = datePickerState)
-        }
-    }
-}
-
-// ---------------------------------------------------------------------------
-// Spending cards bottom panel
-// ---------------------------------------------------------------------------
-
-@Composable
-private fun SpendingCardsPanel(
-    cards: List<SpendingCard>,
-    searchQuery: String,
-    onSearchChange: (String) -> Unit,
-    onCardTap: (SpendingCard) -> Unit,
-    onCardEdit: (SpendingCard) -> Unit,
-    onCardDelete: (SpendingCard) -> Unit,
-    onDragStart: (SpendingCard) -> Unit,
-    onDragEnd: (SpendingCard, Offset) -> Unit,
-    onDragMove: (Offset) -> Unit,
-    onAddCard: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    val expenseCards = cards.filter { it.type == TransactionType.EXPENSE }
-    val incomeCards = cards.filter { it.type == TransactionType.INCOME }
-
-    Column(
-        modifier = modifier
-            .fillMaxWidth()
-            .padding(top = 4.dp, bottom = 8.dp),
-    ) {
-        // Header row: title + add button
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween,
-        ) {
-            Text(
-                text = stringResource(R.string.label_spending_cards),
-                style = MaterialTheme.typography.titleSmall,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.onSurface,
-            )
-            FilledTonalIconButton(
-                onClick = onAddCard,
-                modifier = Modifier.size(32.dp),
-                colors = IconButtonDefaults.filledTonalIconButtonColors(
-                    containerColor = MaterialTheme.colorScheme.primaryContainer,
-                    contentColor = MaterialTheme.colorScheme.primary,
-                ),
-            ) {
-                Icon(Icons.Default.Add, contentDescription = stringResource(R.string.action_new_card))
-            }
-        }
-
-        Spacer(modifier = Modifier.height(8.dp))
-
-        // Search field
-        OutlinedTextField(
-            value = searchQuery,
-            onValueChange = onSearchChange,
-            placeholder = {
-                Text(
-                    stringResource(R.string.placeholder_search_cards),
-                    style = MaterialTheme.typography.bodySmall,
-                )
-            },
-            singleLine = true,
-            shape = RoundedCornerShape(12.dp),
-            textStyle = MaterialTheme.typography.bodySmall,
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp)
-                .height(48.dp),
-        )
-
-        Spacer(modifier = Modifier.height(8.dp))
-
-        // Expense cards section label
-        if (expenseCards.isNotEmpty()) {
-            Text(
-                text = stringResource(R.string.type_expense).uppercase(),
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(horizontal = 16.dp, vertical = 2.dp),
-            )
-            LazyRow(
-                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
-                horizontalArrangement = Arrangement.spacedBy(10.dp),
-            ) {
-                items(expenseCards, key = { it.id }) { card ->
-                    CompactCardChip(
-                        card = card,
-                        onTap = { onCardTap(card) },
-                        onEdit = { onCardEdit(card) },
-                        onDelete = { onCardDelete(card) },
-                        onDragStart = { onDragStart(card) },
-                        onDragEnd = { offset -> onDragEnd(card, offset) },
-                        onDragMove = onDragMove,
-                    )
-                }
-            }
-        }
-
-        // Income cards section label
-        if (incomeCards.isNotEmpty()) {
-            Text(
-                text = stringResource(R.string.type_income).uppercase(),
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(horizontal = 16.dp, vertical = 2.dp),
-            )
-            LazyRow(
-                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
-                horizontalArrangement = Arrangement.spacedBy(10.dp),
-            ) {
-                items(incomeCards, key = { it.id }) { card ->
-                    CompactCardChip(
-                        card = card,
-                        onTap = { onCardTap(card) },
-                        onEdit = { onCardEdit(card) },
-                        onDelete = { onCardDelete(card) },
-                        onDragStart = { onDragStart(card) },
-                        onDragEnd = { offset -> onDragEnd(card, offset) },
-                        onDragMove = onDragMove,
-                    )
-                }
-            }
-        }
-
-        Spacer(modifier = Modifier.height(4.dp))
-    }
-}
-
-// ---------------------------------------------------------------------------
-// Compact card chip — shown in the bottom cards panel
-// ---------------------------------------------------------------------------
-
-@Composable
-private fun CompactCardChip(
-    card: SpendingCard,
-    onTap: () -> Unit,
-    onEdit: () -> Unit,
-    onDelete: () -> Unit,
-    onDragStart: () -> Unit,
-    onDragEnd: (Offset) -> Unit,
-    onDragMove: (Offset) -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    var showMenu by remember { mutableStateOf(false) }
-    var dragPosition by remember { mutableStateOf(Offset.Zero) }
-
-    val accentColor = if (card.type == TransactionType.EXPENSE) {
-        MaterialTheme.colorScheme.error
-    } else {
-        MaterialTheme.colorScheme.tertiary
-    }
-    val isOverBudget = card.defaultAmount > 0L
+    val infiniteTransition = rememberInfiniteTransition(label = "dropZonePulse")
+    val pulseAlpha by infiniteTransition.animateFloat(
+        initialValue = 0.10f,
+        targetValue = 0.25f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 600),
+            repeatMode = androidx.compose.animation.core.RepeatMode.Reverse,
+        ),
+        label = "pulseAlpha",
+    )
 
     Box(modifier = modifier) {
-        Card(
-            onClick = onTap,
-            modifier = Modifier
-                .width(150.dp)
-                .pointerInput(card.id) {
-                    detectDragGesturesAfterLongPress(
-                        onDragStart = { offset ->
-                            dragPosition = offset
-                            onDragStart()
-                        },
-                        onDrag = { change, dragAmount ->
-                            change.consume()
-                            dragPosition += dragAmount
-                            onDragMove(dragAmount)
-                        },
-                        onDragEnd = { onDragEnd(dragPosition) },
-                        onDragCancel = { onDragEnd(dragPosition) },
-                    )
-                },
-            shape = RoundedCornerShape(16.dp),
-            elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
-            colors = CardDefaults.cardColors(
-                containerColor = MaterialTheme.colorScheme.surfaceVariant,
-            ),
-            border = androidx.compose.foundation.BorderStroke(
-                width = 1.dp,
-                color = accentColor.copy(alpha = 0.3f),
-            ),
-        ) {
-            Column(modifier = Modifier.padding(10.dp)) {
-                // Icon + menu
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
+        Column(modifier = Modifier.fillMaxSize()) {
+            // ── Date navigation header ─────────────────────────────────────────
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 4.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                IconButton(
+                    onClick = { onDateChange(today.minusDays(1).format(dateFormatter)) },
                 ) {
-                    card.category?.let { cat ->
-                        CategoryIcon(icon = cat.icon, color = cat.color, size = 28.dp)
-                    } ?: run {
-                        val emoji = if (card.type == TransactionType.EXPENSE) "💸" else "💰"
-                        CategoryIcon(icon = emoji, color = "#9E9E9E", size = 28.dp)
-                    }
-                    Spacer(modifier = Modifier.weight(1f))
-                    Box {
-                        IconButton(
-                            onClick = { showMenu = true },
-                            modifier = Modifier.size(24.dp),
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.MoreVert,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.size(16.dp),
-                            )
-                        }
-                        DropdownMenu(
-                            expanded = showMenu,
-                            onDismissRequest = { showMenu = false },
-                        ) {
-                            DropdownMenuItem(
-                                text = { Text(stringResource(R.string.action_edit)) },
-                                onClick = { showMenu = false; onEdit() },
-                                leadingIcon = {
-                                    Icon(Icons.Default.Edit, contentDescription = null)
-                                },
-                            )
-                            DropdownMenuItem(
-                                text = {
-                                    Text(
-                                        stringResource(R.string.action_delete),
-                                        color = MaterialTheme.colorScheme.error,
-                                    )
-                                },
-                                onClick = { showMenu = false; onDelete() },
-                                leadingIcon = {
-                                    Icon(
-                                        Icons.Default.Delete,
-                                        contentDescription = null,
-                                        tint = MaterialTheme.colorScheme.error,
-                                    )
-                                },
-                            )
-                        }
-                    }
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Filled.KeyboardArrowLeft,
+                        contentDescription = stringResource(R.string.action_previous_day),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
                 }
 
-                Spacer(modifier = Modifier.height(4.dp))
-
-                // Card title
-                Text(
-                    text = card.title,
-                    style = MaterialTheme.typography.bodySmall,
-                    fontWeight = FontWeight.SemiBold,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    maxLines = 1,
-                )
-
-                Spacer(modifier = Modifier.height(6.dp))
-
-                // Variants row
-                if (card.variants.isNotEmpty()) {
-                    Row(
-                        horizontalArrangement = Arrangement.spacedBy(4.dp),
-                        modifier = Modifier.fillMaxWidth(),
-                    ) {
-                        card.variants.take(2).forEach { variant ->
-                            val isDefault = variant.isDefault
+                Column(
+                    modifier = Modifier
+                        .weight(1f)
+                        .clip(RoundedCornerShape(8.dp))
+                        .clickable { showDatePicker = true }
+                        .padding(horizontal = 8.dp, vertical = 4.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            text = today.dayOfWeek.getDisplayName(
+                                TextStyle.FULL,
+                                Locale.getDefault(),
+                            ),
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onBackground,
+                        )
+                        if (isToday) {
+                            Spacer(modifier = Modifier.width(8.dp))
                             Surface(
-                                shape = RoundedCornerShape(8.dp),
-                                color = if (isDefault) {
-                                    accentColor
-                                } else {
-                                    MaterialTheme.colorScheme.surfaceVariant
-                                },
+                                shape = RoundedCornerShape(20.dp),
+                                color = MaterialTheme.colorScheme.primary,
                             ) {
                                 Text(
-                                    text = CurrencyFormatter.formatCompact(variant.amount),
+                                    text = stringResource(R.string.tab_today),
                                     style = MaterialTheme.typography.labelSmall,
-                                    color = if (isDefault) {
-                                        if (card.type == TransactionType.EXPENSE) {
-                                            MaterialTheme.colorScheme.onError
-                                        } else {
-                                            MaterialTheme.colorScheme.onTertiary
-                                        }
-                                    } else {
-                                        MaterialTheme.colorScheme.onSurfaceVariant
-                                    },
-                                    fontWeight = FontWeight.Medium,
-                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                                    color = MaterialTheme.colorScheme.onPrimary,
+                                    fontWeight = FontWeight.SemiBold,
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
                                 )
                             }
                         }
                     }
-                    Spacer(modifier = Modifier.height(8.dp))
-                } else {
-                    Spacer(modifier = Modifier.height(8.dp))
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            text = today.format(DateTimeFormatter.ofPattern("d MMMM yyyy", Locale.getDefault())),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Icon(
+                            imageVector = Icons.Default.CalendarToday,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(12.dp),
+                        )
+                    }
                 }
 
-                // Add button
-                Button(
-                    onClick = onTap,
+                IconButton(
+                    onClick = { onDateChange(today.plusDays(1).format(dateFormatter)) },
+                ) {
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                        contentDescription = stringResource(R.string.action_next_day),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+
+            // ── Day summary row ────────────────────────────────────────────────
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 2.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                // Expense total badge
+                Surface(
+                    shape = RoundedCornerShape(6.dp),
+                    color = MaterialTheme.colorScheme.errorContainer,
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                    ) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.TrendingDown,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.error,
+                            modifier = Modifier.size(14.dp),
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(
+                            text = "-${CurrencyFormatter.formatCompact(dayTotal.expense)}",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.error,
+                            fontWeight = FontWeight.Bold,
+                        )
+                    }
+                }
+                Spacer(modifier = Modifier.width(10.dp))
+                Text(
+                    text = "-${dayTotal.expense}",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.error,
+                    fontWeight = FontWeight.SemiBold,
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    text = "· ${
+                        pluralStringResource(
+                            id = R.plurals.transaction_count,
+                            count = transactions.size,
+                            transactions.size,
+                        )
+                    }",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+
+            HorizontalDivider(
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+                color = MaterialTheme.colorScheme.outlineVariant,
+            )
+
+            // ── Transaction list ───────────────────────────────────────────────
+            LazyColumn(
+                modifier = Modifier.weight(1f),
+                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                items(transactions, key = { it.id }) { transaction ->
+                    TransactionItem(
+                        transaction = transaction,
+                        onEdit = { onEditTransaction(transaction) },
+                        onDelete = { onDeleteTransaction(transaction) },
+                        modifier = Modifier.animateItem(
+                            fadeInSpec = spring(stiffness = Spring.StiffnessMedium),
+                            fadeOutSpec = spring(stiffness = Spring.StiffnessMedium),
+                            placementSpec = spring(stiffness = Spring.StiffnessMediumLow),
+                        ),
+                    )
+                }
+
+                if (transactions.isEmpty()) {
+                    item {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(100.dp),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Text(
+                                text = stringResource(R.string.empty_transactions),
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                textAlign = TextAlign.Center,
+                            )
+                        }
+                    }
+                }
+
+                if (transactions.isEmpty()) {
+                    item {
+                        TextButton(
+                            onClick = onCopyFromYesterday,
+                            modifier = Modifier.fillMaxWidth(),
+                        ) {
+                            Icon(
+                                Icons.Default.ContentCopy,
+                                contentDescription = null,
+                                modifier = Modifier.size(16.dp),
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text(stringResource(R.string.action_copy_from_yesterday))
+                        }
+                    }
+                }
+            }
+
+            // Drop zone overlay shown while dragging
+            if (isDragging) {
+                val overlayColor = if (isDragOver) {
+                    MaterialTheme.colorScheme.primary.copy(alpha = pulseAlpha)
+                } else {
+                    MaterialTheme.colorScheme.primary.copy(alpha = 0.04f)
+                }
+                val borderColor = if (isDragOver) {
+                    MaterialTheme.colorScheme.primary.copy(alpha = pulseAlpha + 0.4f)
+                } else {
+                    MaterialTheme.colorScheme.primary.copy(alpha = 0.18f)
+                }
+                Box(
                     modifier = Modifier
-                        .fillMaxWidth()
-                        .height(30.dp),
-                    shape = RoundedCornerShape(8.dp),
-                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
-                    colors = ButtonDefaults.buttonColors(
+                        .fillMaxSize()
+                        .border(
+                            width = if (isDragOver) 2.dp else 1.dp,
+                            color = borderColor,
+                            shape = RoundedCornerShape(topStart = 0.dp, topEnd = 0.dp),
+                        )
+                        .background(overlayColor),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    if (isDragOver) {
+                        Surface(
+                            shape = RoundedCornerShape(12.dp),
+                            color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.92f),
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.padding(horizontal = 20.dp, vertical = 10.dp),
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Add,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(18.dp),
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(
+                                    text = stringResource(R.string.action_add),
+                                    style = MaterialTheme.typography.titleSmall,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.primary,
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        } // end Box
+
+        if (showDatePicker) {
+            val datePickerState = rememberDatePickerState(
+                initialSelectedDateMillis = today
+                    .atStartOfDay(ZoneOffset.UTC)
+                    .toInstant()
+                    .toEpochMilli(),
+            )
+            DatePickerDialog(
+                onDismissRequest = { showDatePicker = false },
+                confirmButton = {
+                    TextButton(onClick = {
+                        datePickerState.selectedDateMillis?.let { millis ->
+                            val selected = Instant.ofEpochMilli(millis)
+                                .atZone(ZoneOffset.UTC)
+                                .toLocalDate()
+                            onDateChange(selected.format(dateFormatter))
+                        }
+                        showDatePicker = false
+                    }) {
+                        Text(stringResource(R.string.action_confirm))
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showDatePicker = false }) {
+                        Text(stringResource(R.string.action_cancel))
+                    }
+                },
+            ) {
+                DatePicker(state = datePickerState)
+            }
+        }
+    } // end DayView Box
+
+    // ---------------------------------------------------------------------------
+    // Spending cards bottom panel
+    // ---------------------------------------------------------------------------
+}
+
+@Composable
+private fun SpendingCardsPanel(
+        cards: List<SpendingCard>,
+        searchQuery: String,
+        onSearchChange: (String) -> Unit,
+        onCardAdd: (SpendingCard, Long) -> Unit,
+        onCardEdit: (SpendingCard) -> Unit,
+        onCardDelete: (SpendingCard) -> Unit,
+        onDragStart: (SpendingCard, Offset, Long) -> Unit,
+        onDragEnd: (SpendingCard) -> Unit,
+        onDragMove: (Offset) -> Unit,
+        onAddCard: () -> Unit,
+        modifier: Modifier = Modifier,
+    ) {
+        var selectedType by remember { mutableStateOf(TransactionType.EXPENSE) }
+        val displayCards = cards.filter { it.type == selectedType }
+
+        Column(
+            modifier = modifier
+                .fillMaxWidth()
+                .padding(top = 4.dp, bottom = 8.dp),
+        ) {
+            // Header row: title + add button
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween,
+            ) {
+                Text(
+                    text = stringResource(R.string.label_spending_cards),
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurface,
+                )
+                FilledTonalIconButton(
+                    onClick = onAddCard,
+                    modifier = Modifier.size(32.dp),
+                    colors = IconButtonDefaults.filledTonalIconButtonColors(
                         containerColor = MaterialTheme.colorScheme.primaryContainer,
                         contentColor = MaterialTheme.colorScheme.primary,
                     ),
                 ) {
-                    Icon(
-                        Icons.Default.Add,
-                        contentDescription = null,
-                        modifier = Modifier.size(14.dp),
-                    )
-                    Spacer(modifier = Modifier.width(4.dp))
+                    Icon(Icons.Default.Add, contentDescription = stringResource(R.string.action_new_card))
+                }
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            // Search field
+            OutlinedTextField(
+                value = searchQuery,
+                onValueChange = onSearchChange,
+                placeholder = {
                     Text(
-                        text = stringResource(R.string.action_add),
-                        style = MaterialTheme.typography.labelMedium,
-                        fontWeight = FontWeight.SemiBold,
+                        stringResource(R.string.placeholder_search_cards),
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                },
+                singleLine = true,
+                shape = RoundedCornerShape(12.dp),
+                textStyle = MaterialTheme.typography.bodySmall,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp)
+                    .height(48.dp),
+            )
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            // Type toggle row
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                listOf(TransactionType.EXPENSE, TransactionType.INCOME).forEach { type ->
+                    val isSelected = selectedType == type
+                    Surface(
+                        shape = RoundedCornerShape(20.dp),
+                        color = if (isSelected) {
+                            MaterialTheme.colorScheme.primary
+                        } else {
+                            MaterialTheme.colorScheme.surfaceVariant
+                        },
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(20.dp))
+                            .clickable { selectedType = type },
+                    ) {
+                        Text(
+                            text = if (type == TransactionType.EXPENSE) {
+                                stringResource(R.string.type_expense)
+                            } else {
+                                stringResource(R.string.type_income)
+                            },
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                            color = if (isSelected) {
+                                MaterialTheme.colorScheme.onPrimary
+                            } else {
+                                MaterialTheme.colorScheme.onSurfaceVariant
+                            },
+                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                        )
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(4.dp))
+
+            // Cards list
+            LazyRow(
+                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                items(displayCards, key = { it.id }) { card ->
+                    CompactCardChip(
+                        card = card,
+                        onAdd = { amount -> onCardAdd(card, amount) },
+                        onEdit = { onCardEdit(card) },
+                        onDelete = { onCardDelete(card) },
+                        onDragStart = { startOffset, amount -> onDragStart(card, startOffset, amount) },
+                        onDragEnd = { onDragEnd(card) },
+                        onDragMove = onDragMove,
+                        modifier = Modifier.animateItem(
+                            fadeInSpec = spring(stiffness = Spring.StiffnessMedium),
+                            fadeOutSpec = spring(stiffness = Spring.StiffnessMedium),
+                            placementSpec = spring(stiffness = Spring.StiffnessMediumLow),
+                        ),
                     )
                 }
             }
+
+            Spacer(modifier = Modifier.height(4.dp))
         }
     }
-}
 
-// ---------------------------------------------------------------------------
-// Transaction item row
-// ---------------------------------------------------------------------------
+    // ---------------------------------------------------------------------------
+    // Compact card chip — shown in the bottom cards panel
+    // ---------------------------------------------------------------------------
 
-@Composable
-private fun TransactionItem(
-    transaction: Transaction,
-    onEdit: () -> Unit,
-    onDelete: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    val isExpense = transaction.type == TransactionType.EXPENSE
-    val accentColor = if (isExpense) {
-        MaterialTheme.colorScheme.error
-    } else {
-        MaterialTheme.colorScheme.tertiary
-    }
+    @Composable
+    private fun CompactCardChip(
+        card: SpendingCard,
+        onAdd: (amount: Long) -> Unit,
+        onEdit: () -> Unit,
+        onDelete: () -> Unit,
+        onDragStart: (Offset, Long) -> Unit,
+        onDragEnd: () -> Unit,
+        onDragMove: (Offset) -> Unit,
+        modifier: Modifier = Modifier,
+    ) {
+        var showMenu by remember { mutableStateOf(false) }
+        var layoutCoordinates by remember { mutableStateOf<LayoutCoordinates?>(null) }
+        var selectedVariantId by remember(card.id) { mutableStateOf(card.defaultVariant?.id) }
 
-    Box(modifier = modifier) {
-        Card(
-            modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(12.dp),
-            elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
-            colors = CardDefaults.cardColors(
-                containerColor = MaterialTheme.colorScheme.surface,
-            ),
-        ) {
-            Row(modifier = Modifier.fillMaxWidth()) {
-                // Left accent bar
-                Box(
-                    modifier = Modifier
-                        .width(3.dp)
-                        .fillMaxHeight()
-                        .background(accentColor),
-                )
-                Row(
-                    modifier = Modifier
-                        .weight(1f)
-                        .padding(horizontal = 12.dp, vertical = 10.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    transaction.category?.let { cat ->
-                        CategoryIcon(icon = cat.icon, color = cat.color, size = 36.dp)
-                        Spacer(modifier = Modifier.width(10.dp))
-                    } ?: run {
-                        val emoji = if (isExpense) "💸" else "💰"
-                        CategoryIcon(icon = emoji, color = "#9E9E9E", size = 36.dp)
-                        Spacer(modifier = Modifier.width(10.dp))
-                    }
+        val selectedVariant = card.variants.firstOrNull { it.id == selectedVariantId } ?: card.defaultVariant
+        val selectedAmount = selectedVariant?.amount ?: 0L
 
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = transaction.title,
-                            style = MaterialTheme.typography.bodyMedium,
-                            fontWeight = FontWeight.Medium,
-                            color = MaterialTheme.colorScheme.onSurface,
+        val accentColor = if (card.type == TransactionType.EXPENSE) {
+            MaterialTheme.colorScheme.error
+        } else {
+            MaterialTheme.colorScheme.tertiary
+        }
+
+        Box(modifier = modifier.onGloballyPositioned { layoutCoordinates = it }) {
+            Card(
+                modifier = Modifier
+                    .width(150.dp)
+                    .pointerInput(card.id) {
+                        detectDragGestures(
+                            onDragStart = { localOffset ->
+                                val globalOffset = layoutCoordinates?.localToRoot(localOffset) ?: localOffset
+                                onDragStart(globalOffset, selectedAmount)
+                            },
+                            onDrag = { change, dragAmount ->
+                                change.consume()
+                                onDragMove(dragAmount)
+                            },
+                            onDragEnd = { onDragEnd() },
+                            onDragCancel = { onDragEnd() },
                         )
-                        transaction.note?.let { note ->
-                            if (note.isNotBlank()) {
-                                Text(
-                                    text = note,
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    },
+                shape = RoundedCornerShape(16.dp),
+                elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                ),
+                border = androidx.compose.foundation.BorderStroke(
+                    width = 1.dp,
+                    color = accentColor.copy(alpha = 0.3f),
+                ),
+            ) {
+                Column(modifier = Modifier.padding(10.dp)) {
+                    // Icon + menu
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        card.category?.let { cat ->
+                            CategoryIcon(icon = cat.icon, color = cat.color, size = 28.dp)
+                        } ?: run {
+                            val emoji = if (card.type == TransactionType.EXPENSE) "💸" else "💰"
+                            CategoryIcon(icon = emoji, color = "#9E9E9E", size = 28.dp)
+                        }
+                        Spacer(modifier = Modifier.weight(1f))
+                        Box {
+                            IconButton(
+                                onClick = { showMenu = true },
+                                modifier = Modifier.size(24.dp),
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.MoreVert,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.size(16.dp),
+                                )
+                            }
+                            DropdownMenu(
+                                expanded = showMenu,
+                                onDismissRequest = { showMenu = false },
+                            ) {
+                                DropdownMenuItem(
+                                    text = { Text(stringResource(R.string.action_edit)) },
+                                    onClick = { showMenu = false; onEdit() },
+                                    leadingIcon = {
+                                        Icon(Icons.Default.Edit, contentDescription = null)
+                                    },
+                                )
+                                DropdownMenuItem(
+                                    text = {
+                                        Text(
+                                            stringResource(R.string.action_delete),
+                                            color = MaterialTheme.colorScheme.error,
+                                        )
+                                    },
+                                    onClick = { showMenu = false; onDelete() },
+                                    leadingIcon = {
+                                        Icon(
+                                            Icons.Default.Delete,
+                                            contentDescription = null,
+                                            tint = MaterialTheme.colorScheme.error,
+                                        )
+                                    },
                                 )
                             }
                         }
                     }
 
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(
-                            text = (if (isExpense) "-" else "+") +
-                                CurrencyFormatter.formatCompact(transaction.amount),
-                            style = MaterialTheme.typography.titleSmall,
-                            fontWeight = FontWeight.Bold,
-                            color = accentColor,
-                        )
-                        IconButton(
-                            onClick = onEdit,
-                            modifier = Modifier.size(32.dp),
+                    Spacer(modifier = Modifier.height(4.dp))
+
+                    // Card title
+                    Text(
+                        text = card.title,
+                        style = MaterialTheme.typography.bodySmall,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        maxLines = 1,
+                    )
+
+                    Spacer(modifier = Modifier.height(6.dp))
+
+                    // Variants scrollable row
+                    if (card.variants.isNotEmpty()) {
+                        LazyRow(
+                            horizontalArrangement = Arrangement.spacedBy(4.dp),
+                            contentPadding = PaddingValues(vertical = 2.dp),
+                            modifier = Modifier.fillMaxWidth(),
                         ) {
-                            Icon(
-                                Icons.Default.Edit,
-                                contentDescription = stringResource(R.string.action_edit),
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.size(16.dp),
-                            )
+                            items(card.variants, key = { it.id }) { variant ->
+                                val isSelected = variant.id == selectedVariantId
+                                Surface(
+                                    shape = RoundedCornerShape(8.dp),
+                                    color = if (isSelected) {
+                                        accentColor
+                                    } else {
+                                        MaterialTheme.colorScheme.surfaceVariant
+                                    },
+                                    modifier = Modifier.clickable { selectedVariantId = variant.id },
+                                ) {
+                                    Text(
+                                        text = CurrencyFormatter.formatCompact(variant.amount),
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = if (isSelected) {
+                                            if (card.type == TransactionType.EXPENSE) {
+                                                MaterialTheme.colorScheme.onError
+                                            } else {
+                                                MaterialTheme.colorScheme.onTertiary
+                                            }
+                                        } else {
+                                            MaterialTheme.colorScheme.onSurfaceVariant
+                                        },
+                                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                                    )
+                                }
+                            }
                         }
-                        IconButton(
-                            onClick = onDelete,
-                            modifier = Modifier.size(32.dp),
-                        ) {
-                            Icon(
-                                Icons.Default.Delete,
-                                contentDescription = stringResource(R.string.action_delete),
-                                tint = MaterialTheme.colorScheme.error,
-                                modifier = Modifier.size(16.dp),
+                        Spacer(modifier = Modifier.height(8.dp))
+                    } else {
+                        Spacer(modifier = Modifier.height(8.dp))
+                    }
+
+                    // Add button
+                    Button(
+                        onClick = { onAdd(selectedAmount) },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(30.dp),
+                        shape = RoundedCornerShape(8.dp),
+                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = MaterialTheme.colorScheme.primaryContainer,
+                            contentColor = MaterialTheme.colorScheme.primary,
+                        ),
+                    ) {
+                        Icon(
+                            Icons.Default.Add,
+                            contentDescription = null,
+                            modifier = Modifier.size(14.dp),
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(
+                            text = stringResource(R.string.action_add),
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = FontWeight.SemiBold,
+                        )
+                    }
+                }
+            }
+        }
+    }
+
+    // ---------------------------------------------------------------------------
+    // Transaction item row
+    // ---------------------------------------------------------------------------
+
+    @Composable
+    private fun TransactionItem(
+        transaction: Transaction,
+        onEdit: () -> Unit,
+        onDelete: () -> Unit,
+        modifier: Modifier = Modifier,
+    ) {
+        val isExpense = transaction.type == TransactionType.EXPENSE
+        val accentColor = if (isExpense) {
+            MaterialTheme.colorScheme.error
+        } else {
+            MaterialTheme.colorScheme.tertiary
+        }
+
+        Box(modifier = modifier) {
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(12.dp),
+                elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surface,
+                ),
+            ) {
+                Row(modifier = Modifier.fillMaxWidth()) {
+                    // Left accent bar
+                    Box(
+                        modifier = Modifier
+                            .width(3.dp)
+                            .fillMaxHeight()
+                            .background(accentColor),
+                    )
+                    Row(
+                        modifier = Modifier
+                            .weight(1f)
+                            .padding(horizontal = 12.dp, vertical = 10.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        transaction.category?.let { cat ->
+                            CategoryIcon(icon = cat.icon, color = cat.color, size = 36.dp)
+                            Spacer(modifier = Modifier.width(10.dp))
+                        } ?: run {
+                            val emoji = if (isExpense) "💸" else "💰"
+                            CategoryIcon(icon = emoji, color = "#9E9E9E", size = 36.dp)
+                            Spacer(modifier = Modifier.width(10.dp))
+                        }
+
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = transaction.title,
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontWeight = FontWeight.Medium,
+                                color = MaterialTheme.colorScheme.onSurface,
                             )
+                            transaction.note?.let { note ->
+                                if (note.isNotBlank()) {
+                                    Text(
+                                        text = note,
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    )
+                                }
+                            }
+                        }
+
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                text = (if (isExpense) "-" else "+") +
+                                        CurrencyFormatter.formatCompact(transaction.amount),
+                                style = MaterialTheme.typography.titleSmall,
+                                fontWeight = FontWeight.Bold,
+                                color = accentColor,
+                            )
+                            IconButton(
+                                onClick = onEdit,
+                                modifier = Modifier.size(32.dp),
+                            ) {
+                                Icon(
+                                    Icons.Default.Edit,
+                                    contentDescription = stringResource(R.string.action_edit),
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.size(16.dp),
+                                )
+                            }
+                            IconButton(
+                                onClick = onDelete,
+                                modifier = Modifier.size(32.dp),
+                            ) {
+                                Icon(
+                                    Icons.Default.Delete,
+                                    contentDescription = stringResource(R.string.action_delete),
+                                    tint = MaterialTheme.colorScheme.error,
+                                    modifier = Modifier.size(16.dp),
+                                )
+                            }
                         }
                     }
                 }
             }
         }
     }
-}
 
-// ---------------------------------------------------------------------------
-// Total footer item
-// ---------------------------------------------------------------------------
+    // ---------------------------------------------------------------------------
+    // Total footer item
+    // ---------------------------------------------------------------------------
 
-@Composable
-private fun TotalItem(
-    label: String,
-    amount: Long,
-    color: Color,
-    modifier: Modifier = Modifier,
-) {
-    Column(modifier = modifier, horizontalAlignment = Alignment.CenterHorizontally) {
-        Text(
-            text = label,
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        Text(
-            text = CurrencyFormatter.formatCompact(amount),
-            style = MaterialTheme.typography.bodyMedium,
-            fontWeight = FontWeight.SemiBold,
-            color = color,
-        )
+    @Composable
+    private fun TotalItem(
+        label: String,
+        amount: Long,
+        color: Color,
+        modifier: Modifier = Modifier,
+    ) {
+        Column(modifier = modifier, horizontalAlignment = Alignment.CenterHorizontally) {
+            Text(
+                text = label,
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Text(
+                text = CurrencyFormatter.formatCompact(amount),
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = FontWeight.SemiBold,
+                color = color,
+            )
+        }
     }
-}
 
-// ---------------------------------------------------------------------------
-// Previews
-// ---------------------------------------------------------------------------
+    // ---------------------------------------------------------------------------
+    // Previews
+    // ---------------------------------------------------------------------------
 
-@Preview(showBackground = true, uiMode = UI_MODE_NIGHT_NO, name = "Light")
-@Preview(showBackground = true, uiMode = UI_MODE_NIGHT_YES, name = "Dark")
-@Composable
-private fun DayViewPreview() {
-    DragSpendTheme {
-        DayView(
-            selectedDate = "2026-03-17",
-            transactions = listOf(
-                Transaction(
-                    id = "1",
-                    userId = "u1",
-                    date = "2026-03-17",
-                    title = "Tiền xăng",
-                    amount = 150_000,
-                    type = TransactionType.EXPENSE,
-                    position = 0,
+    @Preview(showBackground = true, uiMode = UI_MODE_NIGHT_NO, name = "Light")
+    @Preview(showBackground = true, uiMode = UI_MODE_NIGHT_YES, name = "Dark")
+    @Composable
+    private fun DayViewPreview() {
+        DragSpendTheme {
+            DayView(
+                selectedDate = "2026-03-17",
+                transactions = listOf(
+                    Transaction(
+                        id = "1",
+                        userId = "u1",
+                        date = "2026-03-17",
+                        title = "Tiền xăng",
+                        amount = 150_000,
+                        type = TransactionType.EXPENSE,
+                        position = 0,
+                    ),
                 ),
-            ),
-            dayTotal = com.bossxomlut.dragspend.data.model.DayTotal("2026-03-17", 0, 150_000),
-            onDateChange = {},
-            onEditTransaction = {},
-            onDeleteTransaction = {},
-            onCopyFromYesterday = {},
-        )
-    }
+                dayTotal = com.bossxomlut.dragspend.data.model.DayTotal("2026-03-17", 0, 150_000),
+                onDateChange = {},
+                onEditTransaction = {},
+                onDeleteTransaction = {},
+                onCopyFromYesterday = {},
+                isDragging = false,
+                isDragOver = false,
+            )
+        }
 }
 
 @Preview(showBackground = true, uiMode = UI_MODE_NIGHT_NO, name = "Cards Panel – Light")
@@ -1181,11 +1354,11 @@ private fun SpendingCardsPanelPreview() {
             ),
             searchQuery = "",
             onSearchChange = {},
-            onCardTap = {},
+            onCardAdd = { _, _ -> },
             onCardEdit = {},
             onCardDelete = {},
-            onDragStart = {},
-            onDragEnd = { _, _ -> },
+            onDragStart = { _, _, _ -> },
+            onDragEnd = {},
             onDragMove = {},
             onAddCard = {},
         )
