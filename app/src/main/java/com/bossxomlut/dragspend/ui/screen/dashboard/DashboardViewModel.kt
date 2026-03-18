@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.bossxomlut.dragspend.data.model.Category
 import com.bossxomlut.dragspend.domain.repository.CategoryRepository
+import com.bossxomlut.dragspend.util.AppLog
 import io.github.jan.supabase.SupabaseClient
 import io.github.jan.supabase.auth.auth
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -39,6 +40,7 @@ class DashboardViewModel(
     }
 
     fun selectDate(date: String) {
+        AppLog.d(AppLog.Feature.DASHBOARD, "selectDate", "date=$date")
         _selectedDate.value = date
         val month = date.substring(0, 7)
         if (_viewMonth.value != month) {
@@ -52,6 +54,7 @@ class DashboardViewModel(
 
     private fun loadCategories() {
         val userId = currentUserId ?: return
+        AppLog.d(AppLog.Feature.DASHBOARD, "loadCategories", "userId=${userId.take(8)}")
         viewModelScope.launch {
             categoryRepository.getCategories(userId)
                 .onSuccess { _categories.value = it }

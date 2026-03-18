@@ -12,6 +12,7 @@ import com.bossxomlut.dragspend.domain.repository.CreateTransactionRequest
 import com.bossxomlut.dragspend.domain.repository.CreateVariantRequest
 import com.bossxomlut.dragspend.domain.repository.TransactionRepository
 import com.bossxomlut.dragspend.domain.repository.UpdateTransactionRequest
+import com.bossxomlut.dragspend.util.AppLog
 import com.bossxomlut.dragspend.util.toFriendlyMessage
 import io.github.jan.supabase.SupabaseClient
 import io.github.jan.supabase.auth.auth
@@ -52,12 +53,17 @@ class TodayViewModel(
     private val currentUserId get() = supabase.auth.currentUserOrNull()?.id
 
     fun loadData(date: String) {
-        val userId = currentUserId ?: return
+        val userId = currentUserId ?: run {
+            AppLog.w(AppLog.Feature.TRANSACTION, "loadData", "no authenticated user")
+            return
+        }
+        AppLog.d(AppLog.Feature.TRANSACTION, "loadData", "date=$date")
         loadCards(userId)
         loadTransactions(userId, date)
     }
 
     private fun loadCards(userId: String) {
+        AppLog.d(AppLog.Feature.CARD, "loadCards", "userId=${userId.take(8)}")
         viewModelScope.launch {
             _uiState.update { it.copy(isLoadingCards = true) }
             cardRepository.getCards(userId)
@@ -71,6 +77,7 @@ class TodayViewModel(
     }
 
     fun loadTransactions(userId: String, date: String) {
+        AppLog.d(AppLog.Feature.TRANSACTION, "loadTransactions", "userId=${userId.take(8)}, date=$date")
         viewModelScope.launch {
             _uiState.update { it.copy(isLoadingTransactions = true) }
             transactionRepository.getTransactions(userId, date)
@@ -86,7 +93,13 @@ class TodayViewModel(
     fun addTransactionFromCard(card: SpendingCard, date: String) {
         val userId = currentUserId ?: return
         val amount = card.defaultAmount
-        if (amount <= 0L) return
+        AppLog.d(AppLog.Feature.TRANSACTION, "addTransactionFromCard", "cardId=${card.id}, title=${card.title}, amount=$amount, date=$date")
+        if (amount <= 0L) {
+            _uiState.update {
+                it.copy(errorMessage = "Card \"${card.title}\" has no amount set. Edit the card to add a price option.")
+            }
+            return
+        }
 
         viewModelScope.launch {
             val request = CreateTransactionRequest(
@@ -112,6 +125,7 @@ class TodayViewModel(
     }
 
     fun deleteTransaction(transactionId: String) {
+        AppLog.d(AppLog.Feature.TRANSACTION, "deleteTransaction", "id=$transactionId")
         _uiState.update { it.copy(transactions = it.transactions.filterNot { t -> t.id == transactionId }) }
         viewModelScope.launch {
             transactionRepository.deleteTransaction(transactionId)
@@ -125,6 +139,7 @@ class TodayViewModel(
 
     fun updateTransaction(transactionId: String, request: UpdateTransactionRequest) {
         val userId = currentUserId ?: return
+        AppLog.d(AppLog.Feature.TRANSACTION, "updateTransaction", "id=$transactionId, amount=${request.amount}, type=${request.type}")
         viewModelScope.launch {
             transactionRepository.updateTransaction(transactionId, request)
                 .onSuccess { updated ->
@@ -145,6 +160,7 @@ class TodayViewModel(
     fun copyFromYesterday(date: String) {
         val userId = currentUserId ?: return
         val yesterday = LocalDate.parse(date, dateFormatter).minusDays(1).format(dateFormatter)
+        AppLog.d(AppLog.Feature.TRANSACTION, "copyFromYesterday", "from=$yesterday, to=$date")
         viewModelScope.launch {
             transactionRepository.copyFromYesterday(userId, yesterday, date)
                 .onSuccess { copied ->
@@ -158,6 +174,7 @@ class TodayViewModel(
 
     fun createCard(request: CreateCardRequest) {
         val userId = currentUserId ?: return
+        AppLog.d(AppLog.Feature.CARD, "createCard", "title=${request.title}, type=${request.type}")
         viewModelScope.launch {
             cardRepository.createCard(request)
                 .onSuccess { loadCards(userId) }
@@ -167,6 +184,7 @@ class TodayViewModel(
 
     fun updateCard(cardId: String, request: CreateCardRequest) {
         val userId = currentUserId ?: return
+        AppLog.d(AppLog.Feature.CARD, "updateCard", "id=$cardId, title=${request.title}")
         viewModelScope.launch {
             cardRepository.updateCard(cardId, request)
                 .onSuccess { loadCards(userId) }
@@ -175,6 +193,7 @@ class TodayViewModel(
     }
 
     fun deleteCard(cardId: String) {
+        AppLog.d(AppLog.Feature.CARD, "deleteCard", "id=$cardId")
         viewModelScope.launch {
             cardRepository.deleteCard(cardId)
                 .onSuccess { _uiState.update { it.copy(cards = it.cards.filterNot { c -> c.id == cardId }) } }

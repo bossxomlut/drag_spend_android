@@ -31,6 +31,7 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.bossxomlut.dragspend.R
 import com.bossxomlut.dragspend.data.model.Category
+import com.bossxomlut.dragspend.data.model.SpendingCard
 import com.bossxomlut.dragspend.data.model.Transaction
 import com.bossxomlut.dragspend.data.model.TransactionType
 import com.bossxomlut.dragspend.domain.repository.UpdateTransactionRequest
@@ -43,6 +44,7 @@ import com.bossxomlut.dragspend.util.CurrencyFormatter
 fun EditTransactionDialog(
     transaction: Transaction,
     categories: List<Category>,
+    cards: List<SpendingCard>,
     onSave: (UpdateTransactionRequest) -> Unit,
     onDismiss: () -> Unit,
 ) {
@@ -55,6 +57,7 @@ fun EditTransactionDialog(
         EditTransactionContent(
             initial = transaction,
             categories = categories,
+            cards = cards,
             onSave = onSave,
             onDismiss = onDismiss,
         )
@@ -65,6 +68,7 @@ fun EditTransactionDialog(
 private fun EditTransactionContent(
     initial: Transaction,
     categories: List<Category>,
+    cards: List<SpendingCard>,
     onSave: (UpdateTransactionRequest) -> Unit,
     onDismiss: () -> Unit,
     modifier: Modifier = Modifier,
@@ -74,6 +78,7 @@ private fun EditTransactionContent(
     var parsedAmount by remember { mutableStateOf<Long?>(initial.amount) }
     var selectedType by remember { mutableStateOf(initial.type) }
     var selectedCategoryId by remember { mutableStateOf(initial.categoryId) }
+    var selectedCardId by remember { mutableStateOf(initial.sourceCardId) }
     var note by remember { mutableStateOf(initial.note ?: "") }
 
     val isValid = title.isNotBlank() && parsedAmount != null && parsedAmount!! > 0
@@ -129,6 +134,19 @@ private fun EditTransactionContent(
             )
         }
 
+        if (cards.isNotEmpty()) {
+            Text(
+                text = stringResource(R.string.label_source_card),
+                style = androidx.compose.material3.MaterialTheme.typography.labelMedium,
+                color = androidx.compose.material3.MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            SpendingCardSelector(
+                cards = cards,
+                selectedCardId = selectedCardId,
+                onSelect = { selectedCardId = it },
+            )
+        }
+
         OutlinedTextField(
             value = note,
             onValueChange = { note = it },
@@ -156,6 +174,7 @@ private fun EditTransactionContent(
                             type = selectedType,
                             note = note.ifBlank { null },
                             date = initial.date,
+                            sourceCardId = selectedCardId,
                         ),
                     )
                 },
@@ -164,6 +183,33 @@ private fun EditTransactionContent(
             ) {
                 Text(stringResource(R.string.action_save))
             }
+        }
+    }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+internal fun SpendingCardSelector(
+    cards: List<SpendingCard>,
+    selectedCardId: String?,
+    onSelect: (String?) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    androidx.compose.foundation.layout.FlowRow(
+        modifier = modifier,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        FilterChip(
+            selected = selectedCardId == null,
+            onClick = { onSelect(null) },
+            label = { Text(stringResource(R.string.label_no_card)) },
+        )
+        cards.forEach { card ->
+            FilterChip(
+                selected = selectedCardId == card.id,
+                onClick = { onSelect(if (selectedCardId == card.id) null else card.id) },
+                label = { Text(card.title) },
+            )
         }
     }
 }
@@ -210,6 +256,7 @@ private fun EditTransactionDialogPreview() {
         EditTransactionContent(
             initial = tx,
             categories = emptyList(),
+            cards = emptyList(),
             onSave = {},
             onDismiss = {},
         )

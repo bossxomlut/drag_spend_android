@@ -66,6 +66,8 @@
     <string name="label_variants">Mức giá</string>
     <string name="label_variant_label">Nhãn</string>
     <string name="edit_transaction_title">Chỉnh sửa giao dịch</string>
+    <string name="label_source_card">Thẻ liên kết</string>
+    <string name="label_no_card">Không có</string>
     <string name="delete_transaction_title">Xóa giao dịch</string>
     <string name="delete_transaction_message">Bạn có chắc muốn xóa giao dịch này không?</string>
 

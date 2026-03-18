@@ -3,6 +3,7 @@ package com.bossxomlut.dragspend.ui.screen.auth
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.bossxomlut.dragspend.domain.repository.ProfileRepository
+import com.bossxomlut.dragspend.util.AppLog
 import com.bossxomlut.dragspend.util.toFriendlyMessage
 import io.github.jan.supabase.SupabaseClient
 import io.github.jan.supabase.auth.auth
@@ -32,6 +33,7 @@ class AuthViewModel(
     val uiState: StateFlow<AuthUiState> = _uiState.asStateFlow()
 
     fun login(email: String, password: String) {
+        AppLog.d(AppLog.Feature.AUTH, "login", "email=$email")
         viewModelScope.launch {
             _uiState.value = AuthUiState.Loading
             runCatching {
@@ -40,14 +42,17 @@ class AuthViewModel(
                     this.password = password
                 }
             }.onSuccess {
+                AppLog.success(AppLog.Feature.AUTH, "login")
                 _uiState.value = AuthUiState.Success
             }.onFailure { e ->
+                AppLog.error(AppLog.Feature.AUTH, "login", e)
                 _uiState.value = AuthUiState.Error(e.toFriendlyMessage())
             }
         }
     }
 
     fun register(name: String, email: String, password: String) {
+        AppLog.d(AppLog.Feature.AUTH, "register", "email=$email, name=$name")
         viewModelScope.launch {
             _uiState.value = AuthUiState.Loading
             runCatching {
@@ -59,21 +64,26 @@ class AuthViewModel(
                     }
                 }
             }.onSuccess {
+                AppLog.success(AppLog.Feature.AUTH, "register", "email confirmation pending")
                 _uiState.value = AuthUiState.EmailConfirmationPending
             }.onFailure { e ->
+                AppLog.error(AppLog.Feature.AUTH, "register", e)
                 _uiState.value = AuthUiState.Error(e.toFriendlyMessage())
             }
         }
     }
 
     fun sendPasswordResetEmail(email: String) {
+        AppLog.d(AppLog.Feature.AUTH, "sendPasswordResetEmail", "email=$email")
         viewModelScope.launch {
             _uiState.value = AuthUiState.Loading
             runCatching {
                 supabase.auth.resetPasswordForEmail(email, redirectUrl = "dragspend://auth/reset-password")
             }.onSuccess {
+                AppLog.success(AppLog.Feature.AUTH, "sendPasswordResetEmail")
                 _uiState.value = AuthUiState.Success
             }.onFailure { e ->
+                AppLog.error(AppLog.Feature.AUTH, "sendPasswordResetEmail", e)
                 _uiState.value = AuthUiState.Error(e.toFriendlyMessage())
             }
         }

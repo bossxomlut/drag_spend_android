@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import com.bossxomlut.dragspend.data.model.MonthlyReportRow
 import com.bossxomlut.dragspend.data.model.TransactionType
 import com.bossxomlut.dragspend.domain.repository.TransactionRepository
+import com.bossxomlut.dragspend.util.AppLog
 import com.bossxomlut.dragspend.util.toFriendlyMessage
 import io.github.jan.supabase.SupabaseClient
 import io.github.jan.supabase.auth.auth
@@ -51,6 +52,7 @@ class ReportViewModel(
 
     fun loadReport(yearMonth: String) {
         val userId = currentUserId ?: return
+        AppLog.d(AppLog.Feature.REPORT, "loadReport", "userId=${userId.take(8)}, yearMonth=$yearMonth")
         viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true) }
             transactionRepository.getMonthlyReport(userId, yearMonth)
@@ -106,6 +108,11 @@ class ReportViewModel(
                 highestExpenseDay = highestDay,
             )
         }
+        AppLog.success(
+            AppLog.Feature.REPORT,
+            "processReport",
+            "expense=$totalExpense, income=$totalIncome, days=${dailyBars.size}, categories=${categorySlices.size}",
+        )
     }
 
     fun clearError() {

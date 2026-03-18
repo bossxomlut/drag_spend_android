@@ -3,6 +3,7 @@ package com.bossxomlut.dragspend.ui.screen.onboarding
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.bossxomlut.dragspend.domain.repository.ProfileRepository
+import com.bossxomlut.dragspend.util.AppLog
 import com.bossxomlut.dragspend.util.toFriendlyMessage
 import io.github.jan.supabase.SupabaseClient
 import io.github.jan.supabase.auth.auth
@@ -28,10 +29,12 @@ class OnboardingViewModel(
     val uiState: StateFlow<OnboardingUiState> = _uiState.asStateFlow()
 
     fun selectLanguage(language: String) {
+        AppLog.d(AppLog.Feature.ONBOARDING, "selectLanguage", "language=$language")
         viewModelScope.launch {
             _uiState.value = OnboardingUiState.Loading
             val userId = supabase.auth.currentUserOrNull()?.id
             if (userId == null) {
+                AppLog.w(AppLog.Feature.ONBOARDING, "selectLanguage", "not authenticated")
                 _uiState.value = OnboardingUiState.Error("Not authenticated")
                 return@launch
             }

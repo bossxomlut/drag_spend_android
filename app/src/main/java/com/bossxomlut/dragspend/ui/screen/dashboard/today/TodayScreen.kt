@@ -371,6 +371,7 @@ fun TodayScreen(
         EditTransactionDialog(
             transaction = tx,
             categories = categories,
+            cards = uiState.cards,
             onSave = { req ->
                 todayViewModel.updateTransaction(tx.id, req)
                 editTransaction = null

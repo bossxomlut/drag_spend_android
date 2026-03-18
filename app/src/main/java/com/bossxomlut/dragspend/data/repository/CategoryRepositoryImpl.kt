@@ -3,6 +3,8 @@ package com.bossxomlut.dragspend.data.repository
 import com.bossxomlut.dragspend.data.model.Category
 import com.bossxomlut.dragspend.data.model.TransactionType
 import com.bossxomlut.dragspend.domain.repository.CategoryRepository
+import com.bossxomlut.dragspend.util.AppLog
+import com.bossxomlut.dragspend.util.logResult
 import io.github.jan.supabase.SupabaseClient
 import io.github.jan.supabase.postgrest.from
 import io.github.jan.supabase.postgrest.query.Order
@@ -12,13 +14,14 @@ class CategoryRepositoryImpl(
 ) : CategoryRepository {
 
     override suspend fun getCategories(userId: String): Result<List<Category>> = runCatching {
+        AppLog.d(AppLog.Feature.CATEGORY, "getCategories", "userId=${userId.take(8)}")
         supabase.from("categories")
             .select {
                 filter { eq("user_id", userId) }
                 order("name", order = Order.ASCENDING)
             }
             .decodeList<Category>()
-    }
+    }.logResult(AppLog.Feature.CATEGORY, "getCategories") { "${it.size} categories" }
 
     override suspend fun createCategory(
         userId: String,
@@ -28,6 +31,7 @@ class CategoryRepositoryImpl(
         type: TransactionType,
         language: String,
     ): Result<Category> = runCatching {
+        AppLog.d(AppLog.Feature.CATEGORY, "createCategory", "name=$name, type=$type")
         val row = mapOf(
             "user_id" to userId,
             "name" to name,
@@ -39,9 +43,10 @@ class CategoryRepositoryImpl(
         supabase.from("categories")
             .insert(row) { select() }
             .decodeSingle<Category>()
-    }
+    }.logResult(AppLog.Feature.CATEGORY, "createCategory") { "id=${it.id}" }
 
     override suspend fun updateCategory(category: Category): Result<Category> = runCatching {
+        AppLog.d(AppLog.Feature.CATEGORY, "updateCategory", "id=${category.id}, name=${category.name}")
         val row = mapOf(
             "name" to category.name,
             "icon" to category.icon,
@@ -54,13 +59,14 @@ class CategoryRepositoryImpl(
                 select()
             }
             .decodeSingle<Category>()
-    }
+    }.logResult(AppLog.Feature.CATEGORY, "updateCategory") { "id=${it.id}" }
 
     override suspend fun deleteCategory(categoryId: String): Result<Unit> = runCatching {
+        AppLog.d(AppLog.Feature.CATEGORY, "deleteCategory", "id=$categoryId")
         supabase.from("categories")
             .delete {
                 filter { eq("id", categoryId) }
             }
         Unit
-    }
+    }.logResult(AppLog.Feature.CATEGORY, "deleteCategory") { "deleted" }
 }

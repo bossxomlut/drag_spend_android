@@ -22,6 +22,7 @@ data class UpdateTransactionRequest(
     val type: TransactionType,
     val note: String?,
     val date: String,
+    val sourceCardId: String? = null,
 )
 
 interface TransactionRepository {

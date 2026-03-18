@@ -66,6 +66,8 @@
     <string name="label_variants">Price options</string>
     <string name="label_variant_label">Label</string>
     <string name="edit_transaction_title">Edit Transaction</string>
+    <string name="label_source_card">Linked card</string>
+    <string name="label_no_card">None</string>
     <string name="delete_transaction_title">Delete Transaction</string>
     <string name="delete_transaction_message">Are you sure you want to delete this transaction?</string>
 

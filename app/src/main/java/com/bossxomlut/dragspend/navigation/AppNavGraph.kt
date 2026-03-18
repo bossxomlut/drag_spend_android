@@ -25,7 +25,9 @@ import com.bossxomlut.dragspend.ui.screen.onboarding.LanguageScreen
 import com.bossxomlut.dragspend.ui.screen.settings.SettingsScreen
 import io.github.jan.supabase.SupabaseClient
 import io.github.jan.supabase.auth.auth
+import io.github.jan.supabase.auth.status.SessionStatus
 import io.github.jan.supabase.postgrest.from
+import kotlinx.coroutines.flow.first
 
 enum class StartDestination {
     CHECKING,
@@ -45,6 +47,10 @@ fun AppNavGraph(
     var selectedLanguage by remember { mutableStateOf("en") }
 
     LaunchedEffect(Unit) {
+        // Wait for Auth to finish loading the persisted session from storage
+        supabase.auth.sessionStatus
+            .first { it !is SessionStatus.Initializing }
+
         val session = supabase.auth.currentSessionOrNull()
         if (session == null) {
             startDestination = StartDestination.LOGIN

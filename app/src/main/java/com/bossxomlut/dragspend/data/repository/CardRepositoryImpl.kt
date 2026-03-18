@@ -4,6 +4,8 @@ import com.bossxomlut.dragspend.data.model.CardVariant
 import com.bossxomlut.dragspend.data.model.SpendingCard
 import com.bossxomlut.dragspend.domain.repository.CardRepository
 import com.bossxomlut.dragspend.domain.repository.CreateCardRequest
+import com.bossxomlut.dragspend.util.AppLog
+import com.bossxomlut.dragspend.util.logResult
 import io.github.jan.supabase.SupabaseClient
 import io.github.jan.supabase.postgrest.from
 import io.github.jan.supabase.postgrest.postgrest
@@ -17,6 +19,7 @@ class CardRepositoryImpl(
 ) : CardRepository {
 
     override suspend fun getCards(userId: String): Result<List<SpendingCard>> = runCatching {
+        AppLog.d(AppLog.Feature.CARD, "getCards", "userId=${userId.take(8)}")
         val cards = supabase.from("spending_cards")
             .select {
                 filter { eq("user_id", userId) }
@@ -39,9 +42,10 @@ class CardRepositoryImpl(
 
         val variantsByCard = variants.groupBy { it.cardId }
         cards.map { card -> card.copy(variants = variantsByCard[card.id] ?: emptyList()) }
-    }
+    }.logResult(AppLog.Feature.CARD, "getCards") { "${it.size} cards" }
 
     override suspend fun createCard(request: CreateCardRequest): Result<SpendingCard> = runCatching {
+        AppLog.d(AppLog.Feature.CARD, "createCard", "title=${request.title}, type=${request.type}")
         val cardRow = mapOf(
             "user_id" to request.userId,
             "title" to request.title,
@@ -71,9 +75,10 @@ class CardRepositoryImpl(
         } else {
             card
         }
-    }
+    }.logResult(AppLog.Feature.CARD, "createCard") { "id=${it.id}" }
 
     override suspend fun updateCard(cardId: String, request: CreateCardRequest): Result<SpendingCard> = runCatching {
+        AppLog.d(AppLog.Feature.CARD, "updateCard", "id=$cardId, title=${request.title}")
         val cardRow = mapOf(
             "title" to request.title,
             "category_id" to request.categoryId,
@@ -107,17 +112,19 @@ class CardRepositoryImpl(
             emptyList()
         }
         card.copy(variants = savedVariants)
-    }
+    }.logResult(AppLog.Feature.CARD, "updateCard") { "id=${it.id}" }
 
     override suspend fun deleteCard(cardId: String): Result<Unit> = runCatching {
+        AppLog.d(AppLog.Feature.CARD, "deleteCard", "id=$cardId")
         supabase.from("spending_cards")
             .delete { filter { eq("id", cardId) } }
         Unit
-    }
+    }.logResult(AppLog.Feature.CARD, "deleteCard") { "deleted" }
 
     override suspend fun incrementUseCount(cardId: String): Result<Unit> = runCatching {
+        AppLog.d(AppLog.Feature.CARD, "incrementUseCount", "id=$cardId")
         val params = buildJsonObject { put("card_id", cardId) }
         supabase.postgrest.rpc("increment_card_use_count", params)
         Unit
-    }
+    }.logResult(AppLog.Feature.CARD, "incrementUseCount") { "ok" }
 }
