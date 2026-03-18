@@ -46,28 +46,12 @@ class CardRepositoryImpl(
 
     override suspend fun createCard(request: CreateCardRequest): Result<SpendingCard> = runCatching {
         AppLog.d(AppLog.Feature.CARD, "createCard", "title=${request.title}, type=${request.type}")
-        val cardRow = mapOf(
-            "user_id" to request.userId,
-            "title" to request.title,
-            "category_id" to request.categoryId,
-            "type" to request.type.name.lowercase(),
-            "note" to request.note,
-            "language" to request.language,
-        )
         val card = supabase.from("spending_cards")
-            .insert(cardRow) { select() }
+            .insert(request.toJsonObject()) { select() }
             .decodeSingle<SpendingCard>()
 
         if (request.variants.isNotEmpty()) {
-            val variantRows = request.variants.mapIndexed { index, v ->
-                mapOf(
-                    "card_id" to card.id,
-                    "label" to v.label,
-                    "amount" to v.amount,
-                    "is_default" to v.isDefault,
-                    "position" to index,
-                )
-            }
+            val variantRows = request.variants.mapIndexed { index, v -> v.toJsonObject(card.id, index) }
             val savedVariants = supabase.from("card_variants")
                 .insert(variantRows) { select() }
                 .decodeList<CardVariant>()
@@ -79,14 +63,8 @@ class CardRepositoryImpl(
 
     override suspend fun updateCard(cardId: String, request: CreateCardRequest): Result<SpendingCard> = runCatching {
         AppLog.d(AppLog.Feature.CARD, "updateCard", "id=$cardId, title=${request.title}")
-        val cardRow = mapOf(
-            "title" to request.title,
-            "category_id" to request.categoryId,
-            "type" to request.type.name.lowercase(),
-            "note" to request.note,
-        )
         val card = supabase.from("spending_cards")
-            .update(cardRow) {
+            .update(request.toJsonObject()) {
                 filter { eq("id", cardId) }
                 select()
             }
@@ -95,16 +73,8 @@ class CardRepositoryImpl(
         supabase.from("card_variants")
             .delete { filter { eq("card_id", cardId) } }
 
-        val variantRows = request.variants.mapIndexed { index, v ->
-            mapOf(
-                "card_id" to card.id,
-                "label" to v.label,
-                "amount" to v.amount,
-                "is_default" to v.isDefault,
-                "position" to index,
-            )
-        }
-        val savedVariants = if (variantRows.isNotEmpty()) {
+        val savedVariants = if (request.variants.isNotEmpty()) {
+            val variantRows = request.variants.mapIndexed { index, v -> v.toJsonObject(card.id, index) }
             supabase.from("card_variants")
                 .insert(variantRows) { select() }
                 .decodeList<CardVariant>()

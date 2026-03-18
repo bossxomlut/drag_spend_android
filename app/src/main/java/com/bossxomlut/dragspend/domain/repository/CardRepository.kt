@@ -3,6 +3,9 @@ package com.bossxomlut.dragspend.domain.repository
 import com.bossxomlut.dragspend.data.model.CardVariant
 import com.bossxomlut.dragspend.data.model.SpendingCard
 import com.bossxomlut.dragspend.data.model.TransactionType
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 
 data class CreateCardRequest(
     val userId: String,
@@ -12,14 +15,31 @@ data class CreateCardRequest(
     val note: String?,
     val language: String,
     val variants: List<CreateVariantRequest>,
-)
+) {
+    fun toJsonObject(): JsonObject = buildJsonObject {
+        put("user_id", userId)
+        put("title", title)
+        categoryId?.let { put("category_id", it) }
+        put("type", type.name.lowercase())
+        note?.let { put("note", it) }
+        put("language", language)
+    }
+}
 
 data class CreateVariantRequest(
     val label: String?,
     val amount: Long,
     val isDefault: Boolean,
     val position: Int,
-)
+) {
+    fun toJsonObject(cardId: String, position: Int): JsonObject = buildJsonObject {
+        put("card_id", cardId)
+        label?.let { put("label", it) }
+        put("amount", amount)
+        put("is_default", isDefault)
+        put("position", position)
+    }
+}
 
 interface CardRepository {
     suspend fun getCards(userId: String): Result<List<SpendingCard>>

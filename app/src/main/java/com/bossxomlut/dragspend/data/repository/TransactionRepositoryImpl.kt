@@ -76,17 +76,7 @@ class TransactionRepositoryImpl(
             .decodeList<Transaction>()
             .firstOrNull()?.position ?: -1
 
-        val row = buildJsonObject {
-            put("user_id", request.userId)
-            request.sourceCardId?.let { put("source_card_id", it) }
-            put("date", request.date)
-            put("title", request.title)
-            put("amount", request.amount)
-            request.categoryId?.let { put("category_id", it) }
-            put("type", request.type.name.lowercase())
-            request.note?.let { put("note", it) }
-            put("position", maxPosition + 1)
-        }
+        val row = request.toJsonObject(maxPosition + 1)
         supabase.from("transactions")
             .insert(row) { select() }
             .decodeSingle<Transaction>()
@@ -97,15 +87,7 @@ class TransactionRepositoryImpl(
         request: UpdateTransactionRequest,
     ): Result<Transaction> = runCatching {
         AppLog.d(AppLog.Feature.TRANSACTION, "updateTransaction", "id=$transactionId, amount=${request.amount}, type=${request.type}")
-        val row = buildJsonObject {
-            put("title", request.title)
-            put("amount", request.amount)
-            request.categoryId?.let { put("category_id", it) }
-            put("type", request.type.name.lowercase())
-            request.note?.let { put("note", it) }
-            put("date", request.date)
-            request.sourceCardId?.let { put("source_card_id", it) }
-        }
+        val row = request.toJsonObject()
         supabase.from("transactions")
             .update(row) {
                 filter { eq("id", transactionId) }
@@ -152,17 +134,16 @@ class TransactionRepositoryImpl(
             .firstOrNull()?.position ?: -1
 
         val newRows = yesterday.mapIndexed { index, t ->
-            buildJsonObject {
-                put("user_id", userId)
-                t.sourceCardId?.let { put("source_card_id", it) }
-                put("date", toDate)
-                put("title", t.title)
-                put("amount", t.amount)
-                t.categoryId?.let { put("category_id", it) }
-                put("type", t.type.name.lowercase())
-                t.note?.let { put("note", it) }
-                put("position", maxPosition + 1 + index)
-            }
+            CreateTransactionRequest(
+                userId = userId,
+                sourceCardId = t.sourceCardId,
+                date = toDate,
+                title = t.title,
+                amount = t.amount,
+                categoryId = t.categoryId,
+                type = t.type,
+                note = t.note,
+            ).toJsonObject(maxPosition + 1 + index)
         }
         supabase.from("transactions")
             .insert(newRows) { select() }
