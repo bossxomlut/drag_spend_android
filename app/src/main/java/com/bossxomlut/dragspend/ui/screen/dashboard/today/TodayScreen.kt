@@ -92,7 +92,18 @@ import com.bossxomlut.dragspend.ui.components.ConfirmDialog
 import com.bossxomlut.dragspend.ui.screen.dashboard.DashboardViewModel
 import com.bossxomlut.dragspend.ui.theme.DragSpendTheme
 import com.bossxomlut.dragspend.util.CurrencyFormatter
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.material3.BottomSheetScaffold
+import androidx.compose.material3.DatePicker
+import androidx.compose.material3.DatePickerDialog
+import androidx.compose.material3.SheetValue
+import androidx.compose.material3.rememberBottomSheetScaffoldState
+import androidx.compose.material3.rememberDatePickerState
+import androidx.compose.material3.rememberStandardBottomSheetState
+import java.time.Instant
 import java.time.LocalDate
+import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
 import java.time.format.TextStyle
 import java.util.Locale
@@ -147,8 +158,22 @@ fun TodayScreen(
     var dragOffset by remember { mutableStateOf(Offset.Zero) }
     var dayViewBounds by remember { mutableStateOf<androidx.compose.ui.geometry.Rect?>(null) }
 
-    Box(modifier = Modifier.fillMaxSize()) {
-        Scaffold(
+    Box(modifier = modifier) {
+        val bottomSheetScaffoldState = rememberBottomSheetScaffoldState(
+            bottomSheetState = rememberStandardBottomSheetState(
+                initialValue = SheetValue.PartiallyExpanded,
+                skipHiddenState = true,
+            ),
+        )
+
+        BottomSheetScaffold(
+            modifier = Modifier.fillMaxSize(),
+            scaffoldState = bottomSheetScaffoldState,
+            sheetPeekHeight = 80.dp,
+            sheetContainerColor = MaterialTheme.colorScheme.surface,
+            sheetTonalElevation = 2.dp,
+            sheetShadowElevation = 4.dp,
+            sheetShape = RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp),
             containerColor = MaterialTheme.colorScheme.background,
             topBar = {
                 TopAppBar(
@@ -178,11 +203,28 @@ fun TodayScreen(
                         }
                     },
                     actions = {
-                        // Today chip
+                        // Date chip — shows selected date; tap to jump back to today
+                        val appBarDateFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd")
+                        val appBarToday = LocalDate.now().format(appBarDateFormatter)
+                        val isViewingToday = selectedDate == appBarToday
+                        val chipDateLabel = runCatching {
+                            LocalDate.parse(selectedDate, appBarDateFormatter)
+                                .format(DateTimeFormatter.ofPattern("dd/MM (EEE)", Locale.getDefault()))
+                        }.getOrElse { stringResource(R.string.tab_today) }
+
                         Surface(
                             shape = RoundedCornerShape(20.dp),
-                            color = MaterialTheme.colorScheme.primaryContainer,
-                            modifier = Modifier.padding(end = 4.dp),
+                            color = if (isViewingToday) {
+                                MaterialTheme.colorScheme.primaryContainer
+                            } else {
+                                MaterialTheme.colorScheme.secondaryContainer
+                            },
+                            modifier = Modifier
+                                .padding(end = 4.dp)
+                                .clip(RoundedCornerShape(20.dp))
+                                .clickable(enabled = !isViewingToday) {
+                                    dashboardViewModel.selectDate(appBarToday)
+                                },
                         ) {
                             Row(
                                 verticalAlignment = Alignment.CenterVertically,
@@ -191,14 +233,22 @@ fun TodayScreen(
                                 Icon(
                                     imageVector = Icons.Default.CalendarToday,
                                     contentDescription = null,
-                                    tint = MaterialTheme.colorScheme.primary,
+                                    tint = if (isViewingToday) {
+                                        MaterialTheme.colorScheme.primary
+                                    } else {
+                                        MaterialTheme.colorScheme.secondary
+                                    },
                                     modifier = Modifier.size(14.dp),
                                 )
                                 Spacer(modifier = Modifier.width(4.dp))
                                 Text(
-                                    text = stringResource(R.string.tab_today),
+                                    text = chipDateLabel,
                                     style = MaterialTheme.typography.labelMedium,
-                                    color = MaterialTheme.colorScheme.primary,
+                                    color = if (isViewingToday) {
+                                        MaterialTheme.colorScheme.primary
+                                    } else {
+                                        MaterialTheme.colorScheme.secondary
+                                    },
                                     fontWeight = FontWeight.SemiBold,
                                 )
                             }
@@ -219,30 +269,7 @@ fun TodayScreen(
                     ),
                 )
             },
-        ) { innerPadding ->
-            Column(
-                modifier = modifier
-                    .fillMaxSize()
-                    .padding(innerPadding),
-            ) {
-                // ── Day view (transaction list + date navigation) ──────────
-                DayView(
-                    selectedDate = selectedDate,
-                    transactions = uiState.transactions,
-                    dayTotal = uiState.dayTotal,
-                    onDateChange = { dashboardViewModel.selectDate(it) },
-                    onEditTransaction = { editTransaction = it },
-                    onDeleteTransaction = { deleteTransactionId = it.id },
-                    onCopyFromYesterday = { todayViewModel.copyFromYesterday(selectedDate) },
-                    modifier = Modifier
-                        .weight(1f)
-                        .fillMaxWidth()
-                        .onGloballyPositioned { coords ->
-                            dayViewBounds = coords.boundsInRoot()
-                        },
-                )
-
-                // ── Spending cards bottom panel ────────────────────────────
+            sheetContent = {
                 SpendingCardsPanel(
                     cards = filteredCards,
                     searchQuery = searchQuery,
@@ -265,7 +292,23 @@ fun TodayScreen(
                     onAddCard = { showCreateCard = true },
                     modifier = Modifier.fillMaxWidth(),
                 )
-            }
+            },
+        ) { sheetPadding ->
+            DayView(
+                selectedDate = selectedDate,
+                transactions = uiState.transactions,
+                dayTotal = uiState.dayTotal,
+                onDateChange = { dashboardViewModel.selectDate(it) },
+                onEditTransaction = { editTransaction = it },
+                onDeleteTransaction = { deleteTransactionId = it.id },
+                onCopyFromYesterday = { todayViewModel.copyFromYesterday(selectedDate) },
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(sheetPadding)
+                    .onGloballyPositioned { coords ->
+                        dayViewBounds = coords.boundsInRoot()
+                    },
+            )
         }
 
         // Floating drag ghost
@@ -369,6 +412,7 @@ fun TodayScreen(
 // Day view — date navigation header + transaction list
 // ---------------------------------------------------------------------------
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun DayView(
     selectedDate: String,
@@ -383,6 +427,7 @@ private fun DayView(
     val dateFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd")
     val today = LocalDate.parse(selectedDate, dateFormatter)
     val isToday = today == LocalDate.now()
+    var showDatePicker by remember { mutableStateOf(false) }
 
     Column(modifier = modifier) {
         // ── Date navigation header ─────────────────────────────────────────
@@ -403,7 +448,11 @@ private fun DayView(
             }
 
             Column(
-                modifier = Modifier.weight(1f),
+                modifier = Modifier
+                    .weight(1f)
+                    .clip(RoundedCornerShape(8.dp))
+                    .clickable { showDatePicker = true }
+                    .padding(horizontal = 8.dp, vertical = 4.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -432,11 +481,20 @@ private fun DayView(
                         }
                     }
                 }
-                Text(
-                    text = today.format(DateTimeFormatter.ofPattern("d MMMM yyyy", Locale.getDefault())),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        text = today.format(DateTimeFormatter.ofPattern("d MMMM yyyy", Locale.getDefault())),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Icon(
+                        imageVector = Icons.Default.CalendarToday,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(12.dp),
+                    )
+                }
             }
 
             IconButton(
@@ -539,65 +597,55 @@ private fun DayView(
                 }
             }
 
-            item {
-                TextButton(
-                    onClick = onCopyFromYesterday,
-                    modifier = Modifier.fillMaxWidth(),
-                ) {
-                    Icon(
-                        Icons.Default.ContentCopy,
-                        contentDescription = null,
-                        modifier = Modifier.size(16.dp),
-                    )
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Text(stringResource(R.string.action_copy_from_yesterday))
+            if (transactions.isEmpty()) {
+                item {
+                    TextButton(
+                        onClick = onCopyFromYesterday,
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Icon(
+                            Icons.Default.ContentCopy,
+                            contentDescription = null,
+                            modifier = Modifier.size(16.dp),
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(stringResource(R.string.action_copy_from_yesterday))
+                    }
                 }
             }
         }
 
-        // ── Daily total footer ─────────────────────────────────────────────
-        Surface(
-            color = MaterialTheme.colorScheme.surfaceVariant,
-            modifier = Modifier.fillMaxWidth(),
+    }
+
+    if (showDatePicker) {
+        val datePickerState = rememberDatePickerState(
+            initialSelectedDateMillis = today
+                .atStartOfDay(ZoneOffset.UTC)
+                .toInstant()
+                .toEpochMilli(),
+        )
+        DatePickerDialog(
+            onDismissRequest = { showDatePicker = false },
+            confirmButton = {
+                TextButton(onClick = {
+                    datePickerState.selectedDateMillis?.let { millis ->
+                        val selected = Instant.ofEpochMilli(millis)
+                            .atZone(ZoneOffset.UTC)
+                            .toLocalDate()
+                        onDateChange(selected.format(dateFormatter))
+                    }
+                    showDatePicker = false
+                }) {
+                    Text(stringResource(R.string.action_confirm))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDatePicker = false }) {
+                    Text(stringResource(R.string.action_cancel))
+                }
+            },
         ) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 10.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-            ) {
-                TotalItem(
-                    label = stringResource(R.string.label_income),
-                    amount = dayTotal.income,
-                    color = MaterialTheme.colorScheme.tertiary,
-                )
-                Box(
-                    modifier = Modifier
-                        .width(1.dp)
-                        .height(32.dp)
-                        .background(MaterialTheme.colorScheme.outline.copy(alpha = 0.3f)),
-                )
-                TotalItem(
-                    label = stringResource(R.string.label_expense),
-                    amount = dayTotal.expense,
-                    color = MaterialTheme.colorScheme.error,
-                )
-                Box(
-                    modifier = Modifier
-                        .width(1.dp)
-                        .height(32.dp)
-                        .background(MaterialTheme.colorScheme.outline.copy(alpha = 0.3f)),
-                )
-                TotalItem(
-                    label = stringResource(R.string.label_net),
-                    amount = dayTotal.net,
-                    color = if (dayTotal.net >= 0) {
-                        MaterialTheme.colorScheme.tertiary
-                    } else {
-                        MaterialTheme.colorScheme.error
-                    },
-                )
-            }
+            DatePicker(state = datePickerState)
         }
     }
 }
@@ -623,127 +671,113 @@ private fun SpendingCardsPanel(
     val expenseCards = cards.filter { it.type == TransactionType.EXPENSE }
     val incomeCards = cards.filter { it.type == TransactionType.INCOME }
 
-    Surface(
-        modifier = modifier,
-        color = MaterialTheme.colorScheme.surface,
-        tonalElevation = 2.dp,
-        shape = RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp),
+    Column(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(top = 4.dp, bottom = 8.dp),
     ) {
-        Column(modifier = Modifier.padding(top = 12.dp, bottom = 4.dp)) {
-            // drag handle
-            Box(
-                modifier = Modifier
-                    .align(Alignment.CenterHorizontally)
-                    .size(width = 36.dp, height = 4.dp)
-                    .clip(CircleShape)
-                    .background(MaterialTheme.colorScheme.outlineVariant),
+        // Header row: title + add button
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween,
+        ) {
+            Text(
+                text = stringResource(R.string.label_spending_cards),
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onSurface,
             )
-
-            Spacer(modifier = Modifier.height(10.dp))
-
-            // Header row: title + add button
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween,
+            FilledTonalIconButton(
+                onClick = onAddCard,
+                modifier = Modifier.size(32.dp),
+                colors = IconButtonDefaults.filledTonalIconButtonColors(
+                    containerColor = MaterialTheme.colorScheme.primaryContainer,
+                    contentColor = MaterialTheme.colorScheme.primary,
+                ),
             ) {
-                Text(
-                    text = stringResource(R.string.label_spending_cards),
-                    style = MaterialTheme.typography.titleSmall,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onSurface,
-                )
-                FilledTonalIconButton(
-                    onClick = onAddCard,
-                    modifier = Modifier.size(32.dp),
-                    colors = IconButtonDefaults.filledTonalIconButtonColors(
-                        containerColor = MaterialTheme.colorScheme.primaryContainer,
-                        contentColor = MaterialTheme.colorScheme.primary,
-                    ),
-                ) {
-                    Icon(Icons.Default.Add, contentDescription = stringResource(R.string.action_new_card))
-                }
+                Icon(Icons.Default.Add, contentDescription = stringResource(R.string.action_new_card))
             }
-
-            Spacer(modifier = Modifier.height(8.dp))
-
-            // Search field
-            OutlinedTextField(
-                value = searchQuery,
-                onValueChange = onSearchChange,
-                placeholder = {
-                    Text(
-                        stringResource(R.string.placeholder_search_cards),
-                        style = MaterialTheme.typography.bodySmall,
-                    )
-                },
-                singleLine = true,
-                shape = RoundedCornerShape(12.dp),
-                textStyle = MaterialTheme.typography.bodySmall,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp)
-                    .height(48.dp),
-            )
-
-            Spacer(modifier = Modifier.height(8.dp))
-
-            // Expense cards section label
-            if (expenseCards.isNotEmpty()) {
-                Text(
-                    text = stringResource(R.string.type_expense).uppercase(),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 2.dp),
-                )
-                LazyRow(
-                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
-                    horizontalArrangement = Arrangement.spacedBy(10.dp),
-                ) {
-                    items(expenseCards, key = { it.id }) { card ->
-                        CompactCardChip(
-                            card = card,
-                            onTap = { onCardTap(card) },
-                            onEdit = { onCardEdit(card) },
-                            onDelete = { onCardDelete(card) },
-                            onDragStart = { onDragStart(card) },
-                            onDragEnd = { offset -> onDragEnd(card, offset) },
-                            onDragMove = onDragMove,
-                        )
-                    }
-                }
-            }
-
-            // Income cards section label
-            if (incomeCards.isNotEmpty()) {
-                Text(
-                    text = stringResource(R.string.type_income).uppercase(),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 2.dp),
-                )
-                LazyRow(
-                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
-                    horizontalArrangement = Arrangement.spacedBy(10.dp),
-                ) {
-                    items(incomeCards, key = { it.id }) { card ->
-                        CompactCardChip(
-                            card = card,
-                            onTap = { onCardTap(card) },
-                            onEdit = { onCardEdit(card) },
-                            onDelete = { onCardDelete(card) },
-                            onDragStart = { onDragStart(card) },
-                            onDragEnd = { offset -> onDragEnd(card, offset) },
-                            onDragMove = onDragMove,
-                        )
-                    }
-                }
-            }
-
-            Spacer(modifier = Modifier.height(4.dp))
         }
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        // Search field
+        OutlinedTextField(
+            value = searchQuery,
+            onValueChange = onSearchChange,
+            placeholder = {
+                Text(
+                    stringResource(R.string.placeholder_search_cards),
+                    style = MaterialTheme.typography.bodySmall,
+                )
+            },
+            singleLine = true,
+            shape = RoundedCornerShape(12.dp),
+            textStyle = MaterialTheme.typography.bodySmall,
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp)
+                .height(48.dp),
+        )
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        // Expense cards section label
+        if (expenseCards.isNotEmpty()) {
+            Text(
+                text = stringResource(R.string.type_expense).uppercase(),
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 2.dp),
+            )
+            LazyRow(
+                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                items(expenseCards, key = { it.id }) { card ->
+                    CompactCardChip(
+                        card = card,
+                        onTap = { onCardTap(card) },
+                        onEdit = { onCardEdit(card) },
+                        onDelete = { onCardDelete(card) },
+                        onDragStart = { onDragStart(card) },
+                        onDragEnd = { offset -> onDragEnd(card, offset) },
+                        onDragMove = onDragMove,
+                    )
+                }
+            }
+        }
+
+        // Income cards section label
+        if (incomeCards.isNotEmpty()) {
+            Text(
+                text = stringResource(R.string.type_income).uppercase(),
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 2.dp),
+            )
+            LazyRow(
+                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                items(incomeCards, key = { it.id }) { card ->
+                    CompactCardChip(
+                        card = card,
+                        onTap = { onCardTap(card) },
+                        onEdit = { onCardEdit(card) },
+                        onDelete = { onCardDelete(card) },
+                        onDragStart = { onDragStart(card) },
+                        onDragEnd = { offset -> onDragEnd(card, offset) },
+                        onDragMove = onDragMove,
+                    )
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(4.dp))
     }
 }
 
