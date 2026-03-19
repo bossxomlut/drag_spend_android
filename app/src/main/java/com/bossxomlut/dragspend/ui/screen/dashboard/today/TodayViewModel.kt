@@ -18,6 +18,8 @@ import com.bossxomlut.dragspend.util.AppLog
 import com.bossxomlut.dragspend.util.toFriendlyMessage
 import io.github.jan.supabase.SupabaseClient
 import io.github.jan.supabase.auth.auth
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -55,14 +57,24 @@ class TodayViewModel(
     private val dateFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd")
     private val currentUserId get() = supabase.auth.currentUserOrNull()?.id
 
+    /** Holds the latest debounced loadData job so it can be cancelled on rapid date changes. */
+    private var loadDataJob: Job? = null
+
     fun loadData(date: String) {
         val userId = currentUserId ?: run {
             AppLog.w(AppLog.Feature.TRANSACTION, "loadData", "no authenticated user")
             return
         }
-        AppLog.d(AppLog.Feature.TRANSACTION, "loadData", "date=$date")
-        loadCards(userId)
-        loadTransactions(userId, date)
+        AppLog.d(AppLog.Feature.TRANSACTION, "loadData", "date=$date, debouncing")
+        // Cancel any pending/in-flight load and show loading immediately
+        loadDataJob?.cancel()
+        _uiState.update { it.copy(isLoadingTransactions = true) }
+        loadDataJob = viewModelScope.launch {
+            delay(300L) // debounce: only fires if no new call arrives within 300 ms
+            AppLog.d(AppLog.Feature.TRANSACTION, "loadData", "date=$date, executing after debounce")
+            loadCards(userId)
+            loadTransactions(userId, date)
+        }
     }
 
     private fun loadCards(userId: String) {
@@ -115,10 +127,11 @@ class TodayViewModel(
                 note = null,
             )
             transactionRepository.createTransaction(request)
-                .onSuccess {
-                    loadTransactions(userId, date)
+                .onSuccess { created ->
+                    // Optimistically append the new transaction (use category from card to avoid extra reload)
+                    val newTx = created.copy(category = card.category)
+                    _uiState.update { it.copy(transactions = it.transactions + newTx) }
                     cardRepository.incrementUseCount(card.id)
-                    loadCards(userId)
                 }
                 .onFailure { e ->
                     _uiState.update { it.copy(errorMessage = e.toFriendlyMessage()) }

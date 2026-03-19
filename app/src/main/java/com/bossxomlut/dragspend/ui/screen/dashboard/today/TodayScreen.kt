@@ -4,8 +4,16 @@ import android.content.res.Configuration.UI_MODE_NIGHT_NO
 import android.content.res.Configuration.UI_MODE_NIGHT_YES
 import android.os.Build
 import androidx.annotation.RequiresApi
+import androidx.compose.animation.core.EaseInOut
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -13,6 +21,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -37,10 +46,13 @@ import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material3.BottomSheetScaffold
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.DatePicker
+import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -54,13 +66,15 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SheetValue
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
-import com.bossxomlut.dragspend.ui.components.AppToast
-import com.bossxomlut.dragspend.ui.components.ToastType
+import androidx.compose.material3.rememberBottomSheetScaffoldState
+import androidx.compose.material3.rememberDatePickerState
+import androidx.compose.material3.rememberStandardBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
@@ -72,14 +86,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.animation.core.Spring
-import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
-import androidx.compose.animation.core.spring
-import androidx.compose.animation.core.tween
 import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.layout.onGloballyPositioned
@@ -90,26 +99,19 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
-import org.koin.androidx.compose.koinViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import org.koin.androidx.compose.koinViewModel
 import com.bossxomlut.dragspend.R
 import com.bossxomlut.dragspend.data.model.SpendingCard
 import com.bossxomlut.dragspend.data.model.Transaction
 import com.bossxomlut.dragspend.data.model.TransactionType
+import com.bossxomlut.dragspend.ui.components.AppToast
 import com.bossxomlut.dragspend.ui.components.CategoryIcon
 import com.bossxomlut.dragspend.ui.components.ConfirmDialog
+import com.bossxomlut.dragspend.ui.components.ToastType
 import com.bossxomlut.dragspend.ui.screen.dashboard.DashboardViewModel
 import com.bossxomlut.dragspend.ui.theme.DragSpendTheme
 import com.bossxomlut.dragspend.util.CurrencyFormatter
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.material3.BottomSheetScaffold
-import androidx.compose.material3.DatePicker
-import androidx.compose.material3.DatePickerDialog
-import androidx.compose.material3.SheetValue
-import androidx.compose.material3.rememberBottomSheetScaffoldState
-import androidx.compose.material3.rememberDatePickerState
-import androidx.compose.material3.rememberStandardBottomSheetState
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneOffset
@@ -350,6 +352,7 @@ fun TodayScreen(
                 onCopyFromYesterday = { todayViewModel.copyFromYesterday(selectedDate) },
                 isDragging = draggingCard != null,
                 isDragOver = isDragOverDropArea,
+                isLoading = uiState.isLoadingTransactions,
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(sheetPadding)
@@ -511,6 +514,7 @@ private fun DayView(
     onCopyFromYesterday: () -> Unit,
     isDragging: Boolean = false,
     isDragOver: Boolean = false,
+    isLoading: Boolean = false,
     modifier: Modifier = Modifier,
 ) {
     val dateFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd")
@@ -667,55 +671,67 @@ private fun DayView(
             )
 
             // ── Transaction list ───────────────────────────────────────────────
-            LazyColumn(
-                modifier = Modifier.weight(1f),
-                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
-                verticalArrangement = Arrangement.spacedBy(6.dp),
-            ) {
-                items(transactions, key = { it.id }) { transaction ->
-                    TransactionItem(
-                        transaction = transaction,
-                        onEdit = { onEditTransaction(transaction) },
-                        onDelete = { onDeleteTransaction(transaction) },
-                        modifier = Modifier.animateItem(
-                            fadeInSpec = spring(stiffness = Spring.StiffnessMedium),
-                            fadeOutSpec = spring(stiffness = Spring.StiffnessMedium),
-                            placementSpec = spring(stiffness = Spring.StiffnessMediumLow),
-                        ),
-                    )
-                }
-
-                if (transactions.isEmpty()) {
-                    item {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(100.dp),
-                            contentAlignment = Alignment.Center,
-                        ) {
-                            Text(
-                                text = stringResource(R.string.empty_transactions),
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                textAlign = TextAlign.Center,
-                            )
-                        }
+            if (isLoading) {
+                LazyColumn(
+                    modifier = Modifier.weight(1f),
+                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
+                    items(4) {
+                        ShimmerTransactionItem()
                     }
                 }
+            } else {
+                LazyColumn(
+                    modifier = Modifier.weight(1f),
+                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
+                    items(transactions, key = { it.id }) { transaction ->
+                        TransactionItem(
+                            transaction = transaction,
+                            onEdit = { onEditTransaction(transaction) },
+                            onDelete = { onDeleteTransaction(transaction) },
+                            modifier = Modifier.animateItem(
+                                fadeInSpec = spring(stiffness = Spring.StiffnessMedium),
+                                fadeOutSpec = spring(stiffness = Spring.StiffnessMedium),
+                                placementSpec = spring(stiffness = Spring.StiffnessMediumLow),
+                            ),
+                        )
+                    }
 
-                if (transactions.isEmpty()) {
-                    item {
-                        TextButton(
-                            onClick = onCopyFromYesterday,
-                            modifier = Modifier.fillMaxWidth(),
-                        ) {
-                            Icon(
-                                Icons.Default.ContentCopy,
-                                contentDescription = null,
-                                modifier = Modifier.size(16.dp),
-                            )
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Text(stringResource(R.string.action_copy_from_yesterday))
+                    if (transactions.isEmpty()) {
+                        item {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(100.dp),
+                                contentAlignment = Alignment.Center,
+                            ) {
+                                Text(
+                                    text = stringResource(R.string.empty_transactions),
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    textAlign = TextAlign.Center,
+                                )
+                            }
+                        }
+                    }
+
+                    if (transactions.isEmpty()) {
+                        item {
+                            TextButton(
+                                onClick = onCopyFromYesterday,
+                                modifier = Modifier.fillMaxWidth(),
+                            ) {
+                                Icon(
+                                    Icons.Default.ContentCopy,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(16.dp),
+                                )
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text(stringResource(R.string.action_copy_from_yesterday))
+                            }
                         }
                     }
                 }
@@ -1246,6 +1262,137 @@ private fun SpendingCardsPanel(
                             }
                         }
                     }
+                }
+            }
+        }
+    }
+
+    // ---------------------------------------------------------------------------
+    // Shimmer skeleton for a transaction item
+    // ---------------------------------------------------------------------------
+
+    @Composable
+    private fun ShimmerTransactionItem(modifier: Modifier = Modifier) {
+        val infiniteTransition = rememberInfiniteTransition(label = "shimmer")
+        val shimmerOffset by infiniteTransition.animateFloat(
+            initialValue = -1f,
+            targetValue = 2f,
+            animationSpec = infiniteRepeatable(
+                animation = tween(durationMillis = 1000, easing = EaseInOut),
+            ),
+            label = "shimmerOffset",
+        )
+
+        val shimmerColors = listOf(
+            MaterialTheme.colorScheme.surfaceVariant,
+            MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
+            MaterialTheme.colorScheme.surfaceVariant,
+        )
+
+        Card(
+            modifier = modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(12.dp),
+            elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
+            colors = CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.surface,
+            ),
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(64.dp),
+            ) {
+                Box(
+                    modifier = Modifier
+                        .width(3.dp)
+                        .fillMaxHeight()
+                        .background(MaterialTheme.colorScheme.surfaceVariant),
+                )
+                Row(
+                    modifier = Modifier
+                        .weight(1f)
+                        .padding(horizontal = 12.dp, vertical = 10.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(36.dp)
+                            .clip(CircleShape)
+                            .background(
+                                Brush.linearGradient(
+                                    colors = shimmerColors,
+                                    start = androidx.compose.ui.geometry.Offset(
+                                        x = shimmerOffset * 400f,
+                                        y = 0f,
+                                    ),
+                                    end = androidx.compose.ui.geometry.Offset(
+                                        x = shimmerOffset * 400f + 400f,
+                                        y = 0f,
+                                    ),
+                                ),
+                            ),
+                    )
+                    Spacer(modifier = Modifier.width(10.dp))
+                    Column(modifier = Modifier.weight(1f)) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth(0.55f)
+                                .height(14.dp)
+                                .clip(RoundedCornerShape(4.dp))
+                                .background(
+                                    Brush.linearGradient(
+                                        colors = shimmerColors,
+                                        start = androidx.compose.ui.geometry.Offset(
+                                            x = shimmerOffset * 400f,
+                                            y = 0f,
+                                        ),
+                                        end = androidx.compose.ui.geometry.Offset(
+                                            x = shimmerOffset * 400f + 400f,
+                                            y = 0f,
+                                        ),
+                                    ),
+                                ),
+                        )
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth(0.35f)
+                                .height(10.dp)
+                                .clip(RoundedCornerShape(4.dp))
+                                .background(
+                                    Brush.linearGradient(
+                                        colors = shimmerColors,
+                                        start = androidx.compose.ui.geometry.Offset(
+                                            x = shimmerOffset * 400f,
+                                            y = 0f,
+                                        ),
+                                        end = androidx.compose.ui.geometry.Offset(
+                                            x = shimmerOffset * 400f + 400f,
+                                            y = 0f,
+                                        ),
+                                    ),
+                                ),
+                        )
+                    }
+                    Box(
+                        modifier = Modifier
+                            .width(56.dp)
+                            .height(16.dp)
+                            .clip(RoundedCornerShape(4.dp))
+                            .background(
+                                Brush.linearGradient(
+                                    colors = shimmerColors,
+                                    start = androidx.compose.ui.geometry.Offset(
+                                        x = shimmerOffset * 400f,
+                                        y = 0f,
+                                    ),
+                                    end = androidx.compose.ui.geometry.Offset(
+                                        x = shimmerOffset * 400f + 400f,
+                                        y = 0f,
+                                    ),
+                                ),
+                            ),
+                    )
                 }
             }
         }

@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -18,6 +19,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -63,7 +65,7 @@ fun CreateCardDialog(
     onSave: (CreateCardRequest) -> Unit,
     onDismiss: () -> Unit,
 ) {
-    val sheetState = rememberModalBottomSheetState()
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -114,86 +116,98 @@ private fun CreateCardContent(
     }
 
     Column(
-        modifier = modifier
-            .padding(horizontal = 16.dp)
-            .padding(bottom = 32.dp)
-            .verticalScroll(rememberScrollState()),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
+        modifier = modifier.fillMaxWidth(),
     ) {
-        Text(
-            text = if (editCard == null) stringResource(R.string.create_card_title) else stringResource(R.string.edit_card_title),
-            style = MaterialTheme.typography.titleMedium,
-        )
-
-        OutlinedTextField(
-            value = title,
-            onValueChange = { title = it },
-            label = { Text(stringResource(R.string.label_title)) },
-            singleLine = true,
-            modifier = Modifier.fillMaxWidth(),
-        )
-
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            FilterChip(
-                selected = selectedType == TransactionType.EXPENSE,
-                onClick = { selectedType = TransactionType.EXPENSE },
-                label = { Text(stringResource(R.string.type_expense)) },
-            )
-            FilterChip(
-                selected = selectedType == TransactionType.INCOME,
-                onClick = { selectedType = TransactionType.INCOME },
-                label = { Text(stringResource(R.string.type_income)) },
-            )
-        }
-
-        if (categories.isNotEmpty()) {
-            CategorySelector(
-                categories = categories.filter { it.type == selectedType },
-                selectedId = selectedCategoryId,
-                onSelect = { selectedCategoryId = it },
-            )
-        }
-
-        OutlinedTextField(
-            value = note,
-            onValueChange = { note = it },
-            label = { Text(stringResource(R.string.label_note)) },
-            singleLine = true,
-            modifier = Modifier.fillMaxWidth(),
-        )
-
-        Text(
-            text = stringResource(R.string.label_variants),
-            style = MaterialTheme.typography.labelLarge,
-        )
-
-        variants.forEachIndexed { index, variant ->
-            VariantRow(
-                variant = variant,
-                showDelete = variants.size > 1,
-                onUpdate = { updated -> variants[index] = updated },
-                onDelete = { variants.removeAt(index) },
-                onSetDefault = {
-                    val currentDefault = variants.indexOfFirst { it.isDefault }
-                    if (currentDefault >= 0 && currentDefault != index) {
-                        variants[currentDefault] = variants[currentDefault].copy(isDefault = false)
-                    }
-                    variants[index] = variants[index].copy(isDefault = true)
-                },
-            )
-        }
-
-        TextButton(
-            onClick = { variants.add(VariantDraft()) },
+        // ── Scrollable form content ────────────────────────────────────────
+        Column(
+            modifier = Modifier
+                .weight(1f, fill = false)
+                .padding(horizontal = 16.dp)
+                .verticalScroll(rememberScrollState()),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            Icon(Icons.Default.Add, contentDescription = null)
-            Text(stringResource(R.string.action_add_variant))
+            Spacer(modifier = Modifier.height(4.dp))
+
+            Text(
+                text = if (editCard == null) stringResource(R.string.create_card_title) else stringResource(R.string.edit_card_title),
+                style = MaterialTheme.typography.titleMedium,
+            )
+
+            OutlinedTextField(
+                value = title,
+                onValueChange = { title = it },
+                label = { Text(stringResource(R.string.label_title)) },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth(),
+            )
+
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                FilterChip(
+                    selected = selectedType == TransactionType.EXPENSE,
+                    onClick = { selectedType = TransactionType.EXPENSE },
+                    label = { Text(stringResource(R.string.type_expense)) },
+                )
+                FilterChip(
+                    selected = selectedType == TransactionType.INCOME,
+                    onClick = { selectedType = TransactionType.INCOME },
+                    label = { Text(stringResource(R.string.type_income)) },
+                )
+            }
+
+            if (categories.isNotEmpty()) {
+                CategorySelector(
+                    categories = categories.filter { it.type == selectedType },
+                    selectedId = selectedCategoryId,
+                    onSelect = { selectedCategoryId = it },
+                )
+            }
+
+            OutlinedTextField(
+                value = note,
+                onValueChange = { note = it },
+                label = { Text(stringResource(R.string.label_note)) },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth(),
+            )
+
+            Text(
+                text = stringResource(R.string.label_variants),
+                style = MaterialTheme.typography.labelLarge,
+            )
+
+            variants.forEachIndexed { index, variant ->
+                VariantRow(
+                    variant = variant,
+                    showDelete = variants.size > 1,
+                    onUpdate = { updated -> variants[index] = updated },
+                    onDelete = { variants.removeAt(index) },
+                    onSetDefault = {
+                        val currentDefault = variants.indexOfFirst { it.isDefault }
+                        if (currentDefault >= 0 && currentDefault != index) {
+                            variants[currentDefault] = variants[currentDefault].copy(isDefault = false)
+                        }
+                        variants[index] = variants[index].copy(isDefault = true)
+                    },
+                )
+            }
+
+            TextButton(
+                onClick = { variants.add(VariantDraft()) },
+            ) {
+                Icon(Icons.Default.Add, contentDescription = null)
+                Text(stringResource(R.string.action_add_variant))
+            }
+
+            Spacer(modifier = Modifier.height(4.dp))
         }
 
-        Spacer(modifier = Modifier.height(8.dp))
-
+        // ── Sticky action buttons ──────────────────────────────────────────
+        HorizontalDivider()
         Row(
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 12.dp)
+                .navigationBarsPadding(),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             TextButton(onClick = onDismiss, modifier = Modifier.weight(1f)) {

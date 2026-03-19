@@ -1,6 +1,7 @@
 package com.bossxomlut.dragspend.data.repository
 
 import com.bossxomlut.dragspend.data.model.CardVariant
+import com.bossxomlut.dragspend.data.model.Category
 import com.bossxomlut.dragspend.data.model.SpendingCard
 import com.bossxomlut.dragspend.domain.repository.CardRepository
 import com.bossxomlut.dragspend.domain.repository.CreateCardRequest
@@ -41,7 +42,23 @@ class CardRepositoryImpl(
         }
 
         val variantsByCard = variants.groupBy { it.cardId }
-        cards.map { card -> card.copy(variants = variantsByCard[card.id] ?: emptyList()) }
+
+        val categoryIds = cards.mapNotNull { it.categoryId }.distinct()
+        val categories = if (categoryIds.isNotEmpty()) {
+            supabase.from("categories")
+                .select { filter { isIn("id", categoryIds) } }
+                .decodeList<Category>()
+        } else {
+            emptyList()
+        }
+        val categoryById = categories.associateBy { it.id }
+
+        cards.map { card ->
+            card.copy(
+                variants = variantsByCard[card.id] ?: emptyList(),
+                category = card.categoryId?.let { categoryById[it] },
+            )
+        }
     }.logResult(AppLog.Feature.CARD, "getCards") { "${it.size} cards" }
 
     override suspend fun createCard(request: CreateCardRequest): Result<SpendingCard> = runCatching {

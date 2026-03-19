@@ -9,12 +9,14 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
@@ -48,7 +50,7 @@ fun EditTransactionDialog(
     onSave: (UpdateTransactionRequest) -> Unit,
     onDismiss: () -> Unit,
 ) {
-    val sheetState = rememberModalBottomSheetState()
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -84,81 +86,93 @@ private fun EditTransactionContent(
     val isValid = title.isNotBlank() && parsedAmount != null && parsedAmount!! > 0
 
     Column(
-        modifier = modifier
-            .padding(horizontal = 16.dp)
-            .padding(bottom = 32.dp)
-            .verticalScroll(rememberScrollState()),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
+        modifier = modifier.fillMaxWidth(),
     ) {
-        Text(
-            text = stringResource(R.string.edit_transaction_title),
-            style = androidx.compose.material3.MaterialTheme.typography.titleMedium,
-        )
+        // ── Scrollable form content ────────────────────────────────────────
+        Column(
+            modifier = Modifier
+                .weight(1f, fill = false)
+                .padding(horizontal = 16.dp)
+                .verticalScroll(rememberScrollState()),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Spacer(modifier = Modifier.height(4.dp))
 
-        OutlinedTextField(
-            value = title,
-            onValueChange = { title = it },
-            label = { Text(stringResource(R.string.label_title)) },
-            singleLine = true,
-            modifier = Modifier.fillMaxWidth(),
-        )
-
-        AmountTextField(
-            value = amountText,
-            onValueChange = { raw, parsed ->
-                amountText = raw
-                parsedAmount = parsed
-            },
-            label = stringResource(R.string.label_amount),
-            modifier = Modifier.fillMaxWidth(),
-        )
-
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            FilterChip(
-                selected = selectedType == TransactionType.EXPENSE,
-                onClick = { selectedType = TransactionType.EXPENSE },
-                label = { Text(stringResource(R.string.type_expense)) },
-            )
-            FilterChip(
-                selected = selectedType == TransactionType.INCOME,
-                onClick = { selectedType = TransactionType.INCOME },
-                label = { Text(stringResource(R.string.type_income)) },
-            )
-        }
-
-        if (categories.isNotEmpty()) {
-            CategorySelector(
-                categories = categories,
-                selectedId = selectedCategoryId,
-                onSelect = { selectedCategoryId = it },
-            )
-        }
-
-        if (cards.isNotEmpty()) {
             Text(
-                text = stringResource(R.string.label_source_card),
-                style = androidx.compose.material3.MaterialTheme.typography.labelMedium,
-                color = androidx.compose.material3.MaterialTheme.colorScheme.onSurfaceVariant,
+                text = stringResource(R.string.edit_transaction_title),
+                style = androidx.compose.material3.MaterialTheme.typography.titleMedium,
             )
-            SpendingCardSelector(
-                cards = cards,
-                selectedCardId = selectedCardId,
-                onSelect = { selectedCardId = it },
+
+            OutlinedTextField(
+                value = title,
+                onValueChange = { title = it },
+                label = { Text(stringResource(R.string.label_title)) },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth(),
             )
+
+            AmountTextField(
+                value = amountText,
+                onValueChange = { raw, parsed ->
+                    amountText = raw
+                    parsedAmount = parsed
+                },
+                label = stringResource(R.string.label_amount),
+                modifier = Modifier.fillMaxWidth(),
+            )
+
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                FilterChip(
+                    selected = selectedType == TransactionType.EXPENSE,
+                    onClick = { selectedType = TransactionType.EXPENSE },
+                    label = { Text(stringResource(R.string.type_expense)) },
+                )
+                FilterChip(
+                    selected = selectedType == TransactionType.INCOME,
+                    onClick = { selectedType = TransactionType.INCOME },
+                    label = { Text(stringResource(R.string.type_income)) },
+                )
+            }
+
+            if (categories.isNotEmpty()) {
+                CategorySelector(
+                    categories = categories,
+                    selectedId = selectedCategoryId,
+                    onSelect = { selectedCategoryId = it },
+                )
+            }
+
+            if (cards.isNotEmpty()) {
+                Text(
+                    text = stringResource(R.string.label_source_card),
+                    style = androidx.compose.material3.MaterialTheme.typography.labelMedium,
+                    color = androidx.compose.material3.MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                SpendingCardSelector(
+                    cards = cards,
+                    selectedCardId = selectedCardId,
+                    onSelect = { selectedCardId = it },
+                )
+            }
+
+            OutlinedTextField(
+                value = note,
+                onValueChange = { note = it },
+                label = { Text(stringResource(R.string.label_note)) },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth(),
+            )
+
+            Spacer(modifier = Modifier.height(4.dp))
         }
 
-        OutlinedTextField(
-            value = note,
-            onValueChange = { note = it },
-            label = { Text(stringResource(R.string.label_note)) },
-            singleLine = true,
-            modifier = Modifier.fillMaxWidth(),
-        )
-
-        Spacer(modifier = Modifier.height(8.dp))
-
+        // ── Sticky action buttons ──────────────────────────────────────────
+        HorizontalDivider()
         Row(
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 12.dp)
+                .navigationBarsPadding(),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             TextButton(onClick = onDismiss, modifier = Modifier.weight(1f)) {
