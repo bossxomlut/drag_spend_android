@@ -85,6 +85,7 @@ fun SettingsScreen(
     onDone: () -> Unit,
     onSignOut: () -> Unit,
     onAccountDeleted: () -> Unit,
+    onLanguageSelected: (String) -> Unit = {},
     viewModel: SettingsViewModel = koinViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -196,7 +197,7 @@ fun SettingsScreen(
                     flag = "🇻🇳",
                     label = stringResource(R.string.settings_lang_vi),
                     selected = uiState.language == "vi",
-                    onClick = { viewModel.setLanguage("vi") },
+                    onClick = { viewModel.setLanguage("vi"); onLanguageSelected("vi") },
                 )
                 HorizontalDivider(
                     color = MaterialTheme.colorScheme.outlineVariant,
@@ -206,7 +207,7 @@ fun SettingsScreen(
                     flag = "🇬🇧",
                     label = stringResource(R.string.settings_lang_en),
                     selected = uiState.language == "en",
-                    onClick = { viewModel.setLanguage("en") },
+                    onClick = { viewModel.setLanguage("en"); onLanguageSelected("en") },
                 )
                 HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                 Row(

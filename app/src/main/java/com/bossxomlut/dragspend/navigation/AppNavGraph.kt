@@ -71,6 +71,7 @@ fun AppNavGraph(
                 profile?.language == null -> StartDestination.ONBOARDING
                 else -> StartDestination.DASHBOARD
             }
+            selectedLanguage = profile?.language ?: "vi"
         }.onFailure {
             startDestination = StartDestination.LOGIN
         }
@@ -172,6 +173,7 @@ fun AppNavGraph(
                             popUpTo(0) { inclusive = true }
                         }
                     },
+                    onLanguageSelected = { selectedLanguage = it },
                 )
             }
 
