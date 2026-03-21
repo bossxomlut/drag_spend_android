@@ -140,6 +140,16 @@ class ReportViewModel(
         )
     }
 
+    /**
+     * Removes the cached report for [yearMonth] and fetches fresh data.
+     * Called by ReportScreen when the Today screen signals that transactions were mutated.
+     */
+    fun invalidateAndReload(yearMonth: String) {
+        AppLog.d(AppLog.Feature.REPORT, "invalidateAndReload", "yearMonth=$yearMonth")
+        monthCache.remove(yearMonth)
+        loadReport(yearMonth)
+    }
+
     fun clearError() {
         _uiState.update { it.copy(errorMessage = null) }
     }

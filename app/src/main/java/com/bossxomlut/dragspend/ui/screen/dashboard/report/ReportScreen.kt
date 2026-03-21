@@ -84,7 +84,13 @@ fun ReportScreen(
     var toastMessage by remember { mutableStateOf<String?>(null) }
 
     LaunchedEffect(viewMonth) {
-        reportViewModel.loadReport(viewMonth)
+        // If the Today screen mutated data for this month, bypass the cache and fetch fresh.
+        if (viewMonth in dashboardViewModel.dirtyReportMonths.value) {
+            reportViewModel.invalidateAndReload(viewMonth)
+            dashboardViewModel.clearDirtyReportMonth(viewMonth)
+        } else {
+            reportViewModel.loadReport(viewMonth)
+        }
     }
 
     LaunchedEffect(uiState.errorMessage) {

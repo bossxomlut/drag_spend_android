@@ -2,6 +2,7 @@ package com.bossxomlut.dragspend.data.repository
 
 import com.bossxomlut.dragspend.data.model.MonthlyReportRow
 import com.bossxomlut.dragspend.data.model.Transaction
+import com.bossxomlut.dragspend.domain.repository.CategoryRepository
 import com.bossxomlut.dragspend.domain.repository.CreateTransactionRequest
 import com.bossxomlut.dragspend.domain.repository.TransactionRepository
 import com.bossxomlut.dragspend.domain.repository.UpdateTransactionRequest
@@ -17,11 +18,12 @@ import kotlinx.serialization.json.put
 
 class TransactionRepositoryImpl(
     private val supabase: SupabaseClient,
+    private val categoryRepository: CategoryRepository,
 ) : TransactionRepository {
 
     override suspend fun getTransactions(userId: String, date: String): Result<List<Transaction>> = runCatching {
         AppLog.d(AppLog.Feature.TRANSACTION, "getTransactions", "userId=${userId.take(8)}, date=$date")
-        supabase.from("transactions")
+        val txns = supabase.from("transactions")
             .select {
                 filter {
                     eq("user_id", userId)
@@ -30,6 +32,7 @@ class TransactionRepositoryImpl(
                 order("position", order = Order.ASCENDING)
             }
             .decodeList<Transaction>()
+        attachCategories(txns)
     }.logResult(AppLog.Feature.TRANSACTION, "getTransactions") { "${it.size} items" }
 
     override suspend fun getMonthlyTransactions(userId: String, yearMonth: String): Result<List<Transaction>> = runCatching {
@@ -88,12 +91,13 @@ class TransactionRepositoryImpl(
     ): Result<Transaction> = runCatching {
         AppLog.d(AppLog.Feature.TRANSACTION, "updateTransaction", "id=$transactionId, amount=${request.amount}, type=${request.type}")
         val row = request.toJsonObject()
-        supabase.from("transactions")
+        val updated = supabase.from("transactions")
             .update(row) {
                 filter { eq("id", transactionId) }
                 select()
             }
             .decodeSingle<Transaction>()
+        attachCategories(listOf(updated)).first()
     }.logResult(AppLog.Feature.TRANSACTION, "updateTransaction") { "id=${it.id}" }
 
     override suspend fun deleteTransaction(transactionId: String): Result<Unit> = runCatching {
@@ -148,5 +152,23 @@ class TransactionRepositoryImpl(
         supabase.from("transactions")
             .insert(newRows) { select() }
             .decodeList<Transaction>()
+            .let { attachCategories(it) }
     }.logResult(AppLog.Feature.TRANSACTION, "copyFromYesterday") { "${it.size} copied" }
+
+    /**
+     * Attaches the cached Category object to each transaction that has a category_id.
+     * Uses CategoryRepository so the look-up is served from the in-memory cache on subsequent calls.
+     */
+    private suspend fun attachCategories(transactions: List<Transaction>): List<Transaction> {
+        if (transactions.isEmpty()) return transactions
+        val categoryIds = transactions.mapNotNull { it.categoryId }.distinct()
+        if (categoryIds.isEmpty()) return transactions
+        // All transactions belong to the same user — use the first one to get the userId.
+        val userId = transactions.first().userId
+        val allCategories = categoryRepository.getCategories(userId).getOrElse { emptyList() }
+        val categoryById = allCategories.associateBy { it.id }
+        return transactions.map { tx ->
+            tx.copy(category = tx.categoryId?.let { categoryById[it] })
+        }
+    }
 }

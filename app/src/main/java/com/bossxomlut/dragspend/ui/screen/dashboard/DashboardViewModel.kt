@@ -11,6 +11,7 @@ import io.github.jan.supabase.auth.auth
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.time.LocalDate
 import java.time.YearMonth
@@ -33,6 +34,13 @@ class DashboardViewModel(
     private val _categories = MutableStateFlow<List<Category>>(emptyList())
     val categories: StateFlow<List<Category>> = _categories.asStateFlow()
 
+    /**
+     * Months that were mutated on the Today screen and whose cached report is now stale.
+     * ReportScreen observes this and invalidates its own cache when the viewed month is dirty.
+     */
+    private val _dirtyReportMonths = MutableStateFlow<Set<String>>(emptySet())
+    val dirtyReportMonths: StateFlow<Set<String>> = _dirtyReportMonths.asStateFlow()
+
     val currentUserId: String?
         get() = supabase.auth.currentUserOrNull()?.id
 
@@ -51,6 +59,14 @@ class DashboardViewModel(
 
     fun selectMonth(yearMonth: String) {
         _viewMonth.value = yearMonth
+    }
+
+    fun markReportMonthDirty(yearMonth: String) {
+        _dirtyReportMonths.update { it + yearMonth }
+    }
+
+    fun clearDirtyReportMonth(yearMonth: String) {
+        _dirtyReportMonths.update { it - yearMonth }
     }
 
     private fun loadCategories() {

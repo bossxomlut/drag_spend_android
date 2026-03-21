@@ -69,19 +69,41 @@ class TodayViewModel(
      */
     private val monthTotalsCache = mutableMapOf<String, Map<String, DayTotal>>()
 
+    /**
+     * Per-day transaction cache: date ("yyyy-MM-dd") → list of transactions.
+     * Avoids a network round-trip when navigating back to a previously loaded date.
+     */
+    private val dailyTransactionsCache = mutableMapOf<String, List<Transaction>>()
+
+    /** True once cards have been successfully loaded at least once in this session. */
+    private var cardsInitialized = false
+
     fun loadData(date: String) {
         val userId = currentUserId ?: run {
             AppLog.w(AppLog.Feature.TRANSACTION, "loadData", "no authenticated user")
             return
         }
-        AppLog.d(AppLog.Feature.TRANSACTION, "loadData", "date=$date, debouncing")
-        // Cancel any pending/in-flight load and show loading immediately
+        AppLog.d(AppLog.Feature.TRANSACTION, "loadData", "date=$date")
+
+        // Cards are session-level data; load once, then rely on CRUD methods to keep fresh.
+        if (!cardsInitialized) {
+            viewModelScope.launch { loadCards(userId) }
+        }
+
+        // Cache hit: show transactions immediately with no network call.
+        val cached = dailyTransactionsCache[date]
+        if (cached != null) {
+            AppLog.d(AppLog.Feature.TRANSACTION, "loadData", "cache hit for $date")
+            _uiState.update { it.copy(transactions = cached, isLoadingTransactions = false) }
+            return
+        }
+
+        // Cache miss: debounced fetch.
         loadDataJob?.cancel()
         _uiState.update { it.copy(isLoadingTransactions = true) }
         loadDataJob = viewModelScope.launch {
             delay(300L) // debounce: only fires if no new call arrives within 300 ms
             AppLog.d(AppLog.Feature.TRANSACTION, "loadData", "date=$date, executing after debounce")
-            loadCards(userId)
             loadTransactions(userId, date)
         }
     }
@@ -134,6 +156,7 @@ class TodayViewModel(
             _uiState.update { it.copy(isLoadingCards = true) }
             cardRepository.getCards(userId)
                 .onSuccess { cards ->
+                    cardsInitialized = true
                     _uiState.update { it.copy(cards = cards, isLoadingCards = false) }
                 }
                 .onFailure { e ->
@@ -148,6 +171,7 @@ class TodayViewModel(
             _uiState.update { it.copy(isLoadingTransactions = true) }
             transactionRepository.getTransactions(userId, date)
                 .onSuccess { txns ->
+                    dailyTransactionsCache[date] = txns
                     _uiState.update { it.copy(transactions = txns, isLoadingTransactions = false) }
                 }
                 .onFailure { e ->
@@ -181,7 +205,9 @@ class TodayViewModel(
                 .onSuccess { created ->
                     // Optimistically append the new transaction (use category from card to avoid extra reload)
                     val newTx = created.copy(category = card.category)
-                    _uiState.update { it.copy(transactions = it.transactions + newTx) }
+                    val updatedList = _uiState.value.transactions + newTx
+                    dailyTransactionsCache[date] = updatedList
+                    _uiState.update { it.copy(transactions = updatedList) }
                     cardRepository.incrementUseCount(card.id)
                     // Invalidate calendar cache so the day dot reflects new total
                     invalidateMonthCache(date.substring(0, 7))
@@ -195,7 +221,9 @@ class TodayViewModel(
     fun deleteTransaction(transactionId: String) {
         AppLog.d(AppLog.Feature.TRANSACTION, "deleteTransaction", "id=$transactionId")
         val deletedDate = _uiState.value.transactions.firstOrNull { it.id == transactionId }?.date
-        _uiState.update { it.copy(transactions = it.transactions.filterNot { t -> t.id == transactionId }) }
+        val updatedTransactions = _uiState.value.transactions.filterNot { t -> t.id == transactionId }
+        deletedDate?.let { dailyTransactionsCache[it] = updatedTransactions }
+        _uiState.update { it.copy(transactions = updatedTransactions) }
         viewModelScope.launch {
             transactionRepository.deleteTransaction(transactionId)
                 .onSuccess {
@@ -212,9 +240,22 @@ class TodayViewModel(
     fun updateTransaction(transactionId: String, request: UpdateTransactionRequest) {
         val userId = currentUserId ?: return
         AppLog.d(AppLog.Feature.TRANSACTION, "updateTransaction", "id=$transactionId, amount=${request.amount}, type=${request.type}")
+        val oldDate = _uiState.value.transactions.firstOrNull { it.id == transactionId }?.date
         viewModelScope.launch {
             transactionRepository.updateTransaction(transactionId, request)
                 .onSuccess { updated ->
+                    val newDate = updated.date
+                    if (oldDate != null && oldDate != newDate) {
+                        // Date changed: remove from old date's cache and invalidate the new date's cache.
+                        dailyTransactionsCache[oldDate] = dailyTransactionsCache[oldDate]
+                            ?.filterNot { it.id == transactionId } ?: emptyList()
+                        dailyTransactionsCache.remove(newDate)
+                    } else {
+                        val updatedList = _uiState.value.transactions.map { t ->
+                            if (t.id == transactionId) updated else t
+                        }
+                        dailyTransactionsCache[newDate] = updatedList
+                    }
                     _uiState.update { state ->
                         state.copy(transactions = state.transactions.map { t ->
                             if (t.id == transactionId) updated else t
@@ -237,7 +278,9 @@ class TodayViewModel(
         viewModelScope.launch {
             transactionRepository.copyFromYesterday(userId, yesterday, date)
                 .onSuccess { copied ->
-                    _uiState.update { it.copy(transactions = it.transactions + copied) }
+                    val updatedList = _uiState.value.transactions + copied
+                    dailyTransactionsCache[date] = updatedList
+                    _uiState.update { it.copy(transactions = updatedList) }
                 }
                 .onFailure { e ->
                     _uiState.update { it.copy(errorMessage = e.toFriendlyMessage()) }

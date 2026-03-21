@@ -160,7 +160,6 @@ fun TodayScreen(
 ) {
     val uiState by todayViewModel.uiState.collectAsStateWithLifecycle()
     val selectedDate by dashboardViewModel.selectedDate.collectAsStateWithLifecycle()
-    val viewMonth by dashboardViewModel.viewMonth.collectAsStateWithLifecycle()
     val categories by dashboardViewModel.categories.collectAsStateWithLifecycle()
     var toastMessage by remember { mutableStateOf<String?>(null) }
     val userId = dashboardViewModel.currentUserId ?: ""
@@ -171,11 +170,6 @@ fun TodayScreen(
     LaunchedEffect(selectedDate) {
         todayViewModel.loadData(selectedDate)
         addedCardIds = setOf()
-    }
-
-    // Load monthly day totals whenever the viewed month changes
-    LaunchedEffect(viewMonth) {
-        todayViewModel.loadMonthlyTotals(viewMonth)
     }
 
     LaunchedEffect(uiState.errorMessage) {
@@ -192,8 +186,6 @@ fun TodayScreen(
     var deleteTransactionId by remember { mutableStateOf<String?>(null) }
     var deleteTransactionSourceCardId by remember { mutableStateOf<String?>(null) }
     var searchQuery by remember { mutableStateOf("") }
-    var showMonthPicker by remember { mutableStateOf(false) }
-    var showCalendarOverview by remember { mutableStateOf(false) }
 
     val filteredCards by remember {
         derivedStateOf {
@@ -347,6 +339,7 @@ fun TodayScreen(
                     onCardAdd = { card, amount ->
                         todayViewModel.addTransactionFromCard(card, selectedDate, amount)
                         addedCardIds = addedCardIds + card.id
+                        dashboardViewModel.markReportMonthDirty(selectedDate.substring(0, 7))
                     },
                     onCardEdit = { editCard = it },
                     onCardDelete = { deleteCardId = it.id },
@@ -361,6 +354,7 @@ fun TodayScreen(
                         if (isInDropZone(finalOffset)) {
                             todayViewModel.addTransactionFromCard(card, selectedDate, draggingAmount)
                             addedCardIds = addedCardIds + card.id
+                            dashboardViewModel.markReportMonthDirty(selectedDate.substring(0, 7))
                         }
                         draggingCard = null
                         dragOffset = Offset.Zero
@@ -375,22 +369,18 @@ fun TodayScreen(
         ) { sheetPadding ->
             DayView(
                 selectedDate = selectedDate,
-                viewMonth = viewMonth,
                 transactions = uiState.transactions,
                 dayTotal = uiState.dayTotal,
-                monthDayTotals = uiState.monthDayTotals,
-                isLoadingMonthlyTotals = uiState.isLoadingMonthlyTotals,
-                showCalendarOverview = showCalendarOverview,
-                onToggleCalendar = { showCalendarOverview = !showCalendarOverview },
-                onShowMonthPicker = { showMonthPicker = true },
                 onDateChange = { dashboardViewModel.selectDate(it) },
-                onMonthChange = { dashboardViewModel.selectMonth(it) },
                 onEditTransaction = { editTransaction = it },
                 onDeleteTransaction = {
                         deleteTransactionId = it.id
                         deleteTransactionSourceCardId = it.sourceCardId
                     },
-                onCopyFromYesterday = { todayViewModel.copyFromYesterday(selectedDate) },
+                onCopyFromYesterday = {
+                    todayViewModel.copyFromYesterday(selectedDate)
+                    dashboardViewModel.markReportMonthDirty(selectedDate.substring(0, 7))
+                },
                 isDragging = draggingCard != null,
                 isDragOver = isDragOverDropArea,
                 isLoading = uiState.isLoadingTransactions,
@@ -502,6 +492,7 @@ fun TodayScreen(
             cards = uiState.cards,
             onSave = { req ->
                 todayViewModel.updateTransaction(tx.id, req)
+                dashboardViewModel.markReportMonthDirty(selectedDate.substring(0, 7))
                 editTransaction = null
             },
             onDismiss = { editTransaction = null },
@@ -532,6 +523,7 @@ fun TodayScreen(
             confirmLabel = stringResource(R.string.action_delete),
             onConfirm = {
                 todayViewModel.deleteTransaction(id)
+                dashboardViewModel.markReportMonthDirty(selectedDate.substring(0, 7))
                 deleteTransactionSourceCardId?.let { cardId ->
                     addedCardIds = addedCardIds - cardId
                 }
@@ -545,17 +537,6 @@ fun TodayScreen(
             isDestructive = true,
         )
     }
-
-    if (showMonthPicker) {
-        MonthPickerBottomSheet(
-            currentYearMonth = viewMonth,
-            onMonthSelected = { ym ->
-                dashboardViewModel.selectMonth(ym)
-                showMonthPicker = false
-            },
-            onDismiss = { showMonthPicker = false },
-        )
-    }
 }
 
 // ---------------------------------------------------------------------------
@@ -567,16 +548,9 @@ fun TodayScreen(
 @Composable
 private fun DayView(
     selectedDate: String,
-    viewMonth: String,
     transactions: List<Transaction>,
     dayTotal: com.bossxomlut.dragspend.data.model.DayTotal,
-    monthDayTotals: Map<String, DayTotal>,
-    isLoadingMonthlyTotals: Boolean,
-    showCalendarOverview: Boolean,
-    onToggleCalendar: () -> Unit,
-    onShowMonthPicker: () -> Unit,
     onDateChange: (String) -> Unit,
-    onMonthChange: (String) -> Unit,
     onEditTransaction: (Transaction) -> Unit,
     onDeleteTransaction: (Transaction) -> Unit,
     onCopyFromYesterday: () -> Unit,
@@ -589,7 +563,6 @@ private fun DayView(
     val today = LocalDate.parse(selectedDate, dateFormatter)
     val isToday = today == LocalDate.now()
     var showDatePicker by remember { mutableStateOf(false) }
-    val yearMonth = YearMonth.parse(viewMonth)
 
     val infiniteTransition = rememberInfiniteTransition(label = "dropZonePulse")
     val pulseAlpha by infiniteTransition.animateFloat(
@@ -604,107 +577,6 @@ private fun DayView(
 
     Box(modifier = modifier) {
         Column(modifier = Modifier.fillMaxSize()) {
-            // ── Month header with calendar toggle ──────────────────────────────
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 12.dp, vertical = 4.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                IconButton(onClick = {
-                    val prev = yearMonth.minusMonths(1)
-                    onMonthChange(prev.format(DateTimeFormatter.ofPattern("yyyy-MM")))
-                }) {
-                    Icon(
-                        imageVector = Icons.AutoMirrored.Filled.KeyboardArrowLeft,
-                        contentDescription = stringResource(R.string.action_previous_month),
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-
-                // Month label — tap to open quick month picker
-                Text(
-                    text = "${yearMonth.month.getDisplayName(TextStyle.FULL, Locale.getDefault())} ${yearMonth.year}",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onBackground,
-                    modifier = Modifier
-                        .weight(1f)
-                        .clip(RoundedCornerShape(8.dp))
-                        .clickable { onShowMonthPicker() }
-                        .padding(horizontal = 4.dp, vertical = 4.dp),
-                    textAlign = TextAlign.Center,
-                )
-
-                IconButton(onClick = {
-                    val next = yearMonth.plusMonths(1)
-                    onMonthChange(next.format(DateTimeFormatter.ofPattern("yyyy-MM")))
-                }) {
-                    Icon(
-                        imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
-                        contentDescription = stringResource(R.string.action_next_month),
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-
-                // Toggle calendar overview
-                FilledTonalIconButton(
-                    onClick = onToggleCalendar,
-                    modifier = Modifier.size(36.dp),
-                    colors = IconButtonDefaults.filledTonalIconButtonColors(
-                        containerColor = if (showCalendarOverview) {
-                            MaterialTheme.colorScheme.primaryContainer
-                        } else {
-                            MaterialTheme.colorScheme.surfaceVariant
-                        },
-                        contentColor = if (showCalendarOverview) {
-                            MaterialTheme.colorScheme.primary
-                        } else {
-                            MaterialTheme.colorScheme.onSurfaceVariant
-                        },
-                    ),
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.GridView,
-                        contentDescription = stringResource(R.string.action_toggle_calendar),
-                        modifier = Modifier.size(18.dp),
-                    )
-                }
-            }
-
-            // ── Collapsible monthly calendar overview ─────────────────────────
-            AnimatedVisibility(
-                visible = showCalendarOverview,
-                enter = expandVertically(animationSpec = tween(280)) + fadeIn(animationSpec = tween(280)),
-                exit = shrinkVertically(animationSpec = tween(220)) + fadeOut(animationSpec = tween(220)),
-            ) {
-                AnimatedContent(
-                    targetState = viewMonth,
-                    transitionSpec = {
-                        val forward = targetState > initialState
-                        if (forward) {
-                            slideInHorizontally { it } + fadeIn() togetherWith
-                                slideOutHorizontally { -it } + fadeOut()
-                        } else {
-                            slideInHorizontally { -it } + fadeIn() togetherWith
-                                slideOutHorizontally { it } + fadeOut()
-                        }
-                    },
-                    label = "calendarMonthTransition",
-                ) { animatedMonth ->
-                    MonthOverviewCalendar(
-                        yearMonth = YearMonth.parse(animatedMonth),
-                        selectedDate = selectedDate,
-                        dayTotals = monthDayTotals,
-                        isLoading = isLoadingMonthlyTotals,
-                        onDayClick = { date -> onDateChange(date) },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 8.dp, vertical = 4.dp),
-                    )
-                }
-            }
-
             // ── Date navigation header ─────────────────────────────────────────
             Row(
                 modifier = Modifier
@@ -1917,14 +1789,7 @@ private fun SpendingCardsPanel(
                     ),
                 ),
                 dayTotal = com.bossxomlut.dragspend.data.model.DayTotal("2026-03-17", 0, 150_000),
-                viewMonth = "2026-03",
-                monthDayTotals = emptyMap(),
-                isLoadingMonthlyTotals = false,
-                showCalendarOverview = false,
-                onToggleCalendar = {},
-                onShowMonthPicker = {},
                 onDateChange = {},
-                onMonthChange = {},
                 onEditTransaction = {},
                 onDeleteTransaction = {},
                 onCopyFromYesterday = {},
