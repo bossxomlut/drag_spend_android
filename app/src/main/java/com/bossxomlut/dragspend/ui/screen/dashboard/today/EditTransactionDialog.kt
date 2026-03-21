@@ -11,12 +11,16 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
@@ -49,6 +53,7 @@ fun EditTransactionDialog(
     cards: List<SpendingCard>,
     onSave: (UpdateTransactionRequest) -> Unit,
     onDismiss: () -> Unit,
+    onCreateCategory: (name: String, icon: String, color: String, type: TransactionType) -> Unit = { _, _, _, _ -> },
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
@@ -62,6 +67,7 @@ fun EditTransactionDialog(
             cards = cards,
             onSave = onSave,
             onDismiss = onDismiss,
+            onCreateCategory = onCreateCategory,
         )
     }
 }
@@ -73,6 +79,7 @@ private fun EditTransactionContent(
     cards: List<SpendingCard>,
     onSave: (UpdateTransactionRequest) -> Unit,
     onDismiss: () -> Unit,
+    onCreateCategory: (name: String, icon: String, color: String, type: TransactionType) -> Unit = { _, _, _, _ -> },
     modifier: Modifier = Modifier,
 ) {
     var title by remember { mutableStateOf(initial.title) }
@@ -82,6 +89,7 @@ private fun EditTransactionContent(
     var selectedCategoryId by remember { mutableStateOf(initial.categoryId) }
     var selectedCardId by remember { mutableStateOf(initial.sourceCardId) }
     var note by remember { mutableStateOf(initial.note ?: "") }
+    var showAddCategory by remember { mutableStateOf(false) }
 
     val isValid = title.isNotBlank() && parsedAmount != null && parsedAmount!! > 0
 
@@ -142,16 +150,13 @@ private fun EditTransactionContent(
                 )
             }
 
-            if (cards.isNotEmpty()) {
+            TextButton(
+                onClick = { showAddCategory = true },
+            ) {
+                Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(16.dp))
                 Text(
-                    text = stringResource(R.string.label_source_card),
+                    text = stringResource(R.string.action_new_category),
                     style = androidx.compose.material3.MaterialTheme.typography.labelMedium,
-                    color = androidx.compose.material3.MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                SpendingCardSelector(
-                    cards = cards,
-                    selectedCardId = selectedCardId,
-                    onSelect = { selectedCardId = it },
                 )
             }
 
@@ -198,6 +203,17 @@ private fun EditTransactionContent(
                 Text(stringResource(R.string.action_save))
             }
         }
+    }
+
+    if (showAddCategory) {
+        AddCategoryDialog(
+            type = selectedType,
+            onConfirm = { name, icon, color ->
+                onCreateCategory(name, icon, color, selectedType)
+                showAddCategory = false
+            },
+            onDismiss = { showAddCategory = false },
+        )
     }
 }
 

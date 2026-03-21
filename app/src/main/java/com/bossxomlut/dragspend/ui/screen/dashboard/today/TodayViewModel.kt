@@ -33,6 +33,9 @@ data class TodayUiState(
     val transactions: List<Transaction> = emptyList(),
     val isLoadingCards: Boolean = false,
     val isLoadingTransactions: Boolean = false,
+    val isLoadingMonthlyTotals: Boolean = false,
+    /** Day totals for all days in the currently viewed month. Keyed by "yyyy-MM-dd". */
+    val monthDayTotals: Map<String, DayTotal> = emptyMap(),
     val errorMessage: String? = null,
 ) {
     val dayTotal: DayTotal
@@ -60,6 +63,12 @@ class TodayViewModel(
     /** Holds the latest debounced loadData job so it can be cancelled on rapid date changes. */
     private var loadDataJob: Job? = null
 
+    /**
+     * In-memory cache: yearMonth ("yyyy-MM") → map of date ("yyyy-MM-dd") → DayTotal.
+     * Persists across date navigation within the same session.
+     */
+    private val monthTotalsCache = mutableMapOf<String, Map<String, DayTotal>>()
+
     fun loadData(date: String) {
         val userId = currentUserId ?: run {
             AppLog.w(AppLog.Feature.TRANSACTION, "loadData", "no authenticated user")
@@ -75,6 +84,48 @@ class TodayViewModel(
             loadCards(userId)
             loadTransactions(userId, date)
         }
+    }
+
+    /**
+     * Loads day totals for every day in the given [yearMonth] ("yyyy-MM").
+     * Returns immediately from cache if already loaded; otherwise fetches and caches.
+     */
+    fun loadMonthlyTotals(yearMonth: String) {
+        val cached = monthTotalsCache[yearMonth]
+        if (cached != null) {
+            AppLog.d(AppLog.Feature.TRANSACTION, "loadMonthlyTotals", "cache hit for $yearMonth")
+            _uiState.update { it.copy(monthDayTotals = cached) }
+            return
+        }
+        val userId = currentUserId ?: return
+        AppLog.d(AppLog.Feature.TRANSACTION, "loadMonthlyTotals", "fetching $yearMonth")
+        viewModelScope.launch {
+            _uiState.update { it.copy(isLoadingMonthlyTotals = true) }
+            transactionRepository.getMonthlyTransactions(userId, yearMonth)
+                .onSuccess { txns ->
+                    val totalsMap = txns
+                        .groupBy { it.date }
+                        .mapValues { (date, list) ->
+                            val inc = list.filter { it.type == TransactionType.INCOME }.sumOf { it.amount }
+                            val exp = list.filter { it.type == TransactionType.EXPENSE }.sumOf { it.amount }
+                            DayTotal(date = date, income = inc, expense = exp)
+                        }
+                    monthTotalsCache[yearMonth] = totalsMap
+                    _uiState.update { it.copy(monthDayTotals = totalsMap, isLoadingMonthlyTotals = false) }
+                }
+                .onFailure { e ->
+                    _uiState.update { it.copy(isLoadingMonthlyTotals = false, errorMessage = e.toFriendlyMessage()) }
+                }
+        }
+    }
+
+    /**
+     * Invalidates the cache for [yearMonth] and re-fetches so that after a transaction
+     * is added/deleted the calendar grid reflects the new total.
+     */
+    fun invalidateMonthCache(yearMonth: String) {
+        monthTotalsCache.remove(yearMonth)
+        loadMonthlyTotals(yearMonth)
     }
 
     private fun loadCards(userId: String) {
@@ -132,6 +183,8 @@ class TodayViewModel(
                     val newTx = created.copy(category = card.category)
                     _uiState.update { it.copy(transactions = it.transactions + newTx) }
                     cardRepository.incrementUseCount(card.id)
+                    // Invalidate calendar cache so the day dot reflects new total
+                    invalidateMonthCache(date.substring(0, 7))
                 }
                 .onFailure { e ->
                     _uiState.update { it.copy(errorMessage = e.toFriendlyMessage()) }
@@ -141,9 +194,13 @@ class TodayViewModel(
 
     fun deleteTransaction(transactionId: String) {
         AppLog.d(AppLog.Feature.TRANSACTION, "deleteTransaction", "id=$transactionId")
+        val deletedDate = _uiState.value.transactions.firstOrNull { it.id == transactionId }?.date
         _uiState.update { it.copy(transactions = it.transactions.filterNot { t -> t.id == transactionId }) }
         viewModelScope.launch {
             transactionRepository.deleteTransaction(transactionId)
+                .onSuccess {
+                    deletedDate?.let { date -> invalidateMonthCache(date.substring(0, 7)) }
+                }
                 .onFailure { e ->
                     val userId = currentUserId ?: return@launch
                     loadTransactions(userId, _uiState.value.transactions.firstOrNull()?.date ?: return@launch)

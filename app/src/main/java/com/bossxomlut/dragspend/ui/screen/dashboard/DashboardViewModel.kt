@@ -3,6 +3,7 @@ package com.bossxomlut.dragspend.ui.screen.dashboard
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.bossxomlut.dragspend.data.model.Category
+import com.bossxomlut.dragspend.data.model.TransactionType
 import com.bossxomlut.dragspend.domain.repository.CategoryRepository
 import com.bossxomlut.dragspend.util.AppLog
 import io.github.jan.supabase.SupabaseClient
@@ -63,5 +64,14 @@ class DashboardViewModel(
 
     fun refreshCategories() {
         loadCategories()
+    }
+
+    fun createCategory(name: String, icon: String, color: String, type: TransactionType) {
+        val userId = currentUserId ?: return
+        AppLog.d(AppLog.Feature.DASHBOARD, "createCategory", "name=$name, type=$type")
+        viewModelScope.launch {
+            categoryRepository.createCategory(userId, name, icon, color, type, "vi")
+                .onSuccess { loadCategories() }
+        }
     }
 }

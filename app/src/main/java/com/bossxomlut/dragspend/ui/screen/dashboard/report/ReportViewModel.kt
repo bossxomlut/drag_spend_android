@@ -9,6 +9,7 @@ import com.bossxomlut.dragspend.util.AppLog
 import com.bossxomlut.dragspend.util.toFriendlyMessage
 import io.github.jan.supabase.SupabaseClient
 import io.github.jan.supabase.auth.auth
+import java.time.YearMonth
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -50,18 +51,38 @@ class ReportViewModel(
 
     private val currentUserId get() = supabase.auth.currentUserOrNull()?.id
 
+    /**
+     * In-memory cache: yearMonth ("yyyy-MM") → processed ReportUiState.
+     * Switching back to a previously loaded month is instant (no network call).
+     */
+    private val monthCache = mutableMapOf<String, ReportUiState>()
+
     fun loadReport(yearMonth: String) {
         val userId = currentUserId ?: return
         AppLog.d(AppLog.Feature.REPORT, "loadReport", "userId=${userId.take(8)}, yearMonth=$yearMonth")
+
+        // Cache hit → show immediately, no network call
+        val cached = monthCache[yearMonth]
+        if (cached != null) {
+            AppLog.d(AppLog.Feature.REPORT, "loadReport", "cache hit for $yearMonth")
+            _uiState.value = cached
+            return
+        }
+
+        // Cache miss → keep current data visible while loading (no blank screen)
+        _uiState.update { it.copy(isLoading = true) }
         viewModelScope.launch {
-            _uiState.update { it.copy(isLoading = true) }
             transactionRepository.getMonthlyReport(userId, yearMonth)
-                .onSuccess { rows -> processReport(rows) }
+                .onSuccess { rows ->
+                    processReport(rows, yearMonth)
+                    // Store processed state in cache
+                    monthCache[yearMonth] = _uiState.value
+                }
                 .onFailure { e -> _uiState.update { it.copy(isLoading = false, errorMessage = e.toFriendlyMessage()) } }
         }
     }
 
-    private fun processReport(rows: List<MonthlyReportRow>) {
+    private fun processReport(rows: List<MonthlyReportRow>, yearMonth: String) {
         val dailyMap = mutableMapOf<Int, Pair<Long, Long>>()
         val categoryMap = mutableMapOf<String, CategorySlice>()
         var totalExpense = 0L
@@ -87,9 +108,13 @@ class ReportViewModel(
             }
         }
 
-        val dailyBars = dailyMap.entries
-            .sortedBy { it.key }
-            .map { (day, pair) -> DailyBarData(day = day, expense = pair.first, income = pair.second) }
+        // Fill all days of the month so the bar chart always shows a complete grid
+        val daysInMonth = YearMonth.parse(yearMonth).lengthOfMonth()
+        val dailyBars = (1..daysInMonth)
+            .map { day ->
+                val pair = dailyMap[day] ?: (0L to 0L)
+                DailyBarData(day = day, expense = pair.first, income = pair.second)
+            }
 
         val categorySlices = categoryMap.values.sortedByDescending { it.amount }
 

@@ -2,19 +2,28 @@ package com.bossxomlut.dragspend.ui.screen.dashboard.today
 
 import android.content.res.Configuration.UI_MODE_NIGHT_NO
 import android.content.res.Configuration.UI_MODE_NIGHT_YES
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -36,6 +45,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
@@ -64,6 +75,7 @@ fun CreateCardDialog(
     editCard: SpendingCard? = null,
     onSave: (CreateCardRequest) -> Unit,
     onDismiss: () -> Unit,
+    onCreateCategory: (name: String, icon: String, color: String, type: TransactionType) -> Unit = { _, _, _, _ -> },
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
@@ -78,6 +90,7 @@ fun CreateCardDialog(
             editCard = editCard,
             onSave = onSave,
             onDismiss = onDismiss,
+            onCreateCategory = onCreateCategory,
         )
     }
 }
@@ -90,12 +103,14 @@ private fun CreateCardContent(
     editCard: SpendingCard?,
     onSave: (CreateCardRequest) -> Unit,
     onDismiss: () -> Unit,
+    onCreateCategory: (name: String, icon: String, color: String, type: TransactionType) -> Unit = { _, _, _, _ -> },
     modifier: Modifier = Modifier,
 ) {
     var title by remember { mutableStateOf(editCard?.title ?: "") }
     var selectedType by remember { mutableStateOf(editCard?.type ?: TransactionType.EXPENSE) }
     var selectedCategoryId by remember { mutableStateOf(editCard?.categoryId) }
     var note by remember { mutableStateOf(editCard?.note ?: "") }
+    var showAddCategory by remember { mutableStateOf(false) }
     val variants = remember {
         mutableStateListOf<VariantDraft>().apply {
             if (editCard != null) {
@@ -159,6 +174,16 @@ private fun CreateCardContent(
                     categories = categories.filter { it.type == selectedType },
                     selectedId = selectedCategoryId,
                     onSelect = { selectedCategoryId = it },
+                )
+            }
+
+            TextButton(
+                onClick = { showAddCategory = true },
+            ) {
+                Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(16.dp))
+                Text(
+                    text = stringResource(R.string.action_new_category),
+                    style = MaterialTheme.typography.labelMedium,
                 )
             }
 
@@ -240,6 +265,17 @@ private fun CreateCardContent(
             }
         }
     }
+
+    if (showAddCategory) {
+        AddCategoryDialog(
+            type = selectedType,
+            onConfirm = { name, icon, color ->
+                onCreateCategory(name, icon, color, selectedType)
+                showAddCategory = false
+            },
+            onDismiss = { showAddCategory = false },
+        )
+    }
 }
 
 @Composable
@@ -297,4 +333,93 @@ private fun CreateCardDialogPreview() {
             onDismiss = {},
         )
     }
+}
+
+// ---------------------------------------------------------------------------
+// Add category inline dialog
+// ---------------------------------------------------------------------------
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+internal fun AddCategoryDialog(
+    type: TransactionType,
+    onConfirm: (name: String, icon: String, color: String) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    var name by remember { mutableStateOf("") }
+    var icon by remember { mutableStateOf("") }
+    val colorPresets = remember {
+        listOf(
+            "#F44336", "#E91E63", "#9C27B0", "#3F51B5",
+            "#2196F3", "#009688", "#4CAF50", "#FF9800",
+            "#795548", "#607D8B",
+        )
+    }
+    var selectedColor by remember { mutableStateOf(colorPresets.first()) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(R.string.create_category_title)) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                OutlinedTextField(
+                    value = name,
+                    onValueChange = { name = it },
+                    label = { Text(stringResource(R.string.label_title)) },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                OutlinedTextField(
+                    value = icon,
+                    onValueChange = { icon = it.take(2) },
+                    label = { Text(stringResource(R.string.label_category_icon)) },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                Text(
+                    text = stringResource(R.string.label_category_color),
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    colorPresets.forEach { color ->
+                        val bgColor = runCatching {
+                            Color(android.graphics.Color.parseColor(color))
+                        }.getOrDefault(Color.Gray)
+                        Box(
+                            modifier = Modifier
+                                .size(32.dp)
+                                .clip(CircleShape)
+                                .background(bgColor)
+                                .then(
+                                    if (selectedColor == color) {
+                                        Modifier.border(
+                                            width = 3.dp,
+                                            color = MaterialTheme.colorScheme.onSurface,
+                                            shape = CircleShape,
+                                        )
+                                    } else {
+                                        Modifier
+                                    },
+                                )
+                                .clickable { selectedColor = color },
+                        )
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = { onConfirm(name, icon.ifBlank { "📦" }, selectedColor) },
+                enabled = name.isNotBlank(),
+            ) {
+                Text(stringResource(R.string.action_save))
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text(stringResource(R.string.action_cancel))
+            }
+        },
+    )
 }

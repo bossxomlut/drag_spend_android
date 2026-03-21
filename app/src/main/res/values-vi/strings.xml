@@ -77,6 +77,10 @@
     <string name="delete_card_title">Xóa thẻ</string>
     <string name="delete_card_message">Bạn có chắc muốn xóa thẻ này không? Các giao dịch hiện tại sẽ không bị xóa.</string>
     <string name="action_add_variant">Thêm mức giá</string>
+    <string name="action_new_category">Danh mục mới</string>
+    <string name="create_category_title">Tạo danh mục</string>
+    <string name="label_category_icon">Biểu tượng (emoji)</string>
+    <string name="label_category_color">Màu sắc</string>
 
     <!-- Report -->
     <string name="report_daily_chart_title">Chi tiêu theo ngày</string>
@@ -86,8 +90,13 @@
     <string name="report_avg_daily">Chi tiêu TB/ngày</string>
     <string name="report_highest_day">Ngày chi nhiều nhất</string>
     <string name="report_empty">Không có dữ liệu tháng này</string>
+    <string name="report_net_balance">Số dư ròng</string>
+    <string name="report_legend_expense">Chi tiêu</string>
+    <string name="report_legend_income">Thu nhập</string>
     <string name="action_previous_month">Tháng trước</string>
     <string name="action_next_month">Tháng sau</string>
+    <string name="action_toggle_calendar">Xem tổng quan tháng</string>
+    <string name="label_select_month">Chọn tháng</string>
 
     <!-- Account deleted -->
     <string name="account_deleted_title">Tài khoản đã được lên lịch xóa</string>

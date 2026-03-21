@@ -4,6 +4,9 @@ import android.content.res.Configuration.UI_MODE_NIGHT_NO
 import android.content.res.Configuration.UI_MODE_NIGHT_YES
 import android.os.Build
 import androidx.annotation.RequiresApi
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.EaseInOut
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloat
@@ -11,6 +14,13 @@ import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -22,6 +32,7 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -32,9 +43,14 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
@@ -45,12 +61,14 @@ import androidx.compose.material.icons.filled.CalendarToday
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.GridView
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material3.BottomSheetScaffold
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DatePicker
 import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.DropdownMenu
@@ -63,6 +81,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Scaffold
@@ -74,6 +93,7 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.rememberBottomSheetScaffoldState
 import androidx.compose.material3.rememberDatePickerState
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.material3.rememberStandardBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -81,6 +101,7 @@ import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -99,9 +120,10 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import org.koin.androidx.compose.koinViewModel
 import com.bossxomlut.dragspend.R
+import com.bossxomlut.dragspend.data.model.DayTotal
 import com.bossxomlut.dragspend.data.model.SpendingCard
 import com.bossxomlut.dragspend.data.model.Transaction
 import com.bossxomlut.dragspend.data.model.TransactionType
@@ -114,11 +136,14 @@ import com.bossxomlut.dragspend.ui.theme.DragSpendTheme
 import com.bossxomlut.dragspend.util.CurrencyFormatter
 import java.time.Instant
 import java.time.LocalDate
+import java.time.YearMonth
 import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
 import java.time.format.TextStyle
 import java.util.Locale
 import kotlin.math.roundToInt
+import kotlinx.coroutines.launch
+import org.koin.androidx.compose.koinViewModel
 
 // ---------------------------------------------------------------------------
 // Root screen
@@ -135,15 +160,22 @@ fun TodayScreen(
 ) {
     val uiState by todayViewModel.uiState.collectAsStateWithLifecycle()
     val selectedDate by dashboardViewModel.selectedDate.collectAsStateWithLifecycle()
+    val viewMonth by dashboardViewModel.viewMonth.collectAsStateWithLifecycle()
     val categories by dashboardViewModel.categories.collectAsStateWithLifecycle()
     var toastMessage by remember { mutableStateOf<String?>(null) }
     val userId = dashboardViewModel.currentUserId ?: ""
     val language = "vi"
     var addedCardIds by remember { mutableStateOf(setOf<String>()) }
 
+    // Load transactions for selected date (debounced)
     LaunchedEffect(selectedDate) {
         todayViewModel.loadData(selectedDate)
         addedCardIds = setOf()
+    }
+
+    // Load monthly day totals whenever the viewed month changes
+    LaunchedEffect(viewMonth) {
+        todayViewModel.loadMonthlyTotals(viewMonth)
     }
 
     LaunchedEffect(uiState.errorMessage) {
@@ -160,6 +192,8 @@ fun TodayScreen(
     var deleteTransactionId by remember { mutableStateOf<String?>(null) }
     var deleteTransactionSourceCardId by remember { mutableStateOf<String?>(null) }
     var searchQuery by remember { mutableStateOf("") }
+    var showMonthPicker by remember { mutableStateOf(false) }
+    var showCalendarOverview by remember { mutableStateOf(false) }
 
     val filteredCards by remember {
         derivedStateOf {
@@ -341,9 +375,16 @@ fun TodayScreen(
         ) { sheetPadding ->
             DayView(
                 selectedDate = selectedDate,
+                viewMonth = viewMonth,
                 transactions = uiState.transactions,
                 dayTotal = uiState.dayTotal,
+                monthDayTotals = uiState.monthDayTotals,
+                isLoadingMonthlyTotals = uiState.isLoadingMonthlyTotals,
+                showCalendarOverview = showCalendarOverview,
+                onToggleCalendar = { showCalendarOverview = !showCalendarOverview },
+                onShowMonthPicker = { showMonthPicker = true },
                 onDateChange = { dashboardViewModel.selectDate(it) },
+                onMonthChange = { dashboardViewModel.selectMonth(it) },
                 onEditTransaction = { editTransaction = it },
                 onDeleteTransaction = {
                         deleteTransactionId = it.id
@@ -431,6 +472,9 @@ fun TodayScreen(
                 showCreateCard = false
             },
             onDismiss = { showCreateCard = false },
+            onCreateCategory = { name, icon, color, type ->
+                dashboardViewModel.createCategory(name, icon, color, type)
+            },
         )
     }
 
@@ -445,6 +489,9 @@ fun TodayScreen(
                 editCard = null
             },
             onDismiss = { editCard = null },
+            onCreateCategory = { name, icon, color, type ->
+                dashboardViewModel.createCategory(name, icon, color, type)
+            },
         )
     }
 
@@ -458,6 +505,9 @@ fun TodayScreen(
                 editTransaction = null
             },
             onDismiss = { editTransaction = null },
+            onCreateCategory = { name, icon, color, type ->
+                dashboardViewModel.createCategory(name, icon, color, type)
+            },
         )
     }
 
@@ -495,6 +545,17 @@ fun TodayScreen(
             isDestructive = true,
         )
     }
+
+    if (showMonthPicker) {
+        MonthPickerBottomSheet(
+            currentYearMonth = viewMonth,
+            onMonthSelected = { ym ->
+                dashboardViewModel.selectMonth(ym)
+                showMonthPicker = false
+            },
+            onDismiss = { showMonthPicker = false },
+        )
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -506,9 +567,16 @@ fun TodayScreen(
 @Composable
 private fun DayView(
     selectedDate: String,
+    viewMonth: String,
     transactions: List<Transaction>,
     dayTotal: com.bossxomlut.dragspend.data.model.DayTotal,
+    monthDayTotals: Map<String, DayTotal>,
+    isLoadingMonthlyTotals: Boolean,
+    showCalendarOverview: Boolean,
+    onToggleCalendar: () -> Unit,
+    onShowMonthPicker: () -> Unit,
     onDateChange: (String) -> Unit,
+    onMonthChange: (String) -> Unit,
     onEditTransaction: (Transaction) -> Unit,
     onDeleteTransaction: (Transaction) -> Unit,
     onCopyFromYesterday: () -> Unit,
@@ -521,6 +589,7 @@ private fun DayView(
     val today = LocalDate.parse(selectedDate, dateFormatter)
     val isToday = today == LocalDate.now()
     var showDatePicker by remember { mutableStateOf(false) }
+    val yearMonth = YearMonth.parse(viewMonth)
 
     val infiniteTransition = rememberInfiniteTransition(label = "dropZonePulse")
     val pulseAlpha by infiniteTransition.animateFloat(
@@ -535,6 +604,107 @@ private fun DayView(
 
     Box(modifier = modifier) {
         Column(modifier = Modifier.fillMaxSize()) {
+            // ── Month header with calendar toggle ──────────────────────────────
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 12.dp, vertical = 4.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                IconButton(onClick = {
+                    val prev = yearMonth.minusMonths(1)
+                    onMonthChange(prev.format(DateTimeFormatter.ofPattern("yyyy-MM")))
+                }) {
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Filled.KeyboardArrowLeft,
+                        contentDescription = stringResource(R.string.action_previous_month),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+
+                // Month label — tap to open quick month picker
+                Text(
+                    text = "${yearMonth.month.getDisplayName(TextStyle.FULL, Locale.getDefault())} ${yearMonth.year}",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onBackground,
+                    modifier = Modifier
+                        .weight(1f)
+                        .clip(RoundedCornerShape(8.dp))
+                        .clickable { onShowMonthPicker() }
+                        .padding(horizontal = 4.dp, vertical = 4.dp),
+                    textAlign = TextAlign.Center,
+                )
+
+                IconButton(onClick = {
+                    val next = yearMonth.plusMonths(1)
+                    onMonthChange(next.format(DateTimeFormatter.ofPattern("yyyy-MM")))
+                }) {
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                        contentDescription = stringResource(R.string.action_next_month),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+
+                // Toggle calendar overview
+                FilledTonalIconButton(
+                    onClick = onToggleCalendar,
+                    modifier = Modifier.size(36.dp),
+                    colors = IconButtonDefaults.filledTonalIconButtonColors(
+                        containerColor = if (showCalendarOverview) {
+                            MaterialTheme.colorScheme.primaryContainer
+                        } else {
+                            MaterialTheme.colorScheme.surfaceVariant
+                        },
+                        contentColor = if (showCalendarOverview) {
+                            MaterialTheme.colorScheme.primary
+                        } else {
+                            MaterialTheme.colorScheme.onSurfaceVariant
+                        },
+                    ),
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.GridView,
+                        contentDescription = stringResource(R.string.action_toggle_calendar),
+                        modifier = Modifier.size(18.dp),
+                    )
+                }
+            }
+
+            // ── Collapsible monthly calendar overview ─────────────────────────
+            AnimatedVisibility(
+                visible = showCalendarOverview,
+                enter = expandVertically(animationSpec = tween(280)) + fadeIn(animationSpec = tween(280)),
+                exit = shrinkVertically(animationSpec = tween(220)) + fadeOut(animationSpec = tween(220)),
+            ) {
+                AnimatedContent(
+                    targetState = viewMonth,
+                    transitionSpec = {
+                        val forward = targetState > initialState
+                        if (forward) {
+                            slideInHorizontally { it } + fadeIn() togetherWith
+                                slideOutHorizontally { -it } + fadeOut()
+                        } else {
+                            slideInHorizontally { -it } + fadeIn() togetherWith
+                                slideOutHorizontally { it } + fadeOut()
+                        }
+                    },
+                    label = "calendarMonthTransition",
+                ) { animatedMonth ->
+                    MonthOverviewCalendar(
+                        yearMonth = YearMonth.parse(animatedMonth),
+                        selectedDate = selectedDate,
+                        dayTotals = monthDayTotals,
+                        isLoading = isLoadingMonthlyTotals,
+                        onDayClick = { date -> onDateChange(date) },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 8.dp, vertical = 4.dp),
+                    )
+                }
+            }
+
             // ── Date navigation header ─────────────────────────────────────────
             Row(
                 modifier = Modifier
@@ -825,6 +995,306 @@ private fun DayView(
     // ---------------------------------------------------------------------------
     // Spending cards bottom panel
     // ---------------------------------------------------------------------------
+}
+
+// ---------------------------------------------------------------------------
+// Monthly calendar overview grid
+// ---------------------------------------------------------------------------
+
+@RequiresApi(Build.VERSION_CODES.O)
+@Composable
+private fun MonthOverviewCalendar(
+    yearMonth: YearMonth,
+    selectedDate: String,
+    dayTotals: Map<String, DayTotal>,
+    isLoading: Boolean,
+    onDayClick: (String) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val dateFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd")
+    val today = LocalDate.now()
+    val firstDayOfMonth = yearMonth.atDay(1)
+    // Monday=1, so shift: Mon=0 … Sun=6
+    val startOffset = (firstDayOfMonth.dayOfWeek.value - 1 + 7) % 7
+    val daysInMonth = yearMonth.lengthOfMonth()
+
+    val dayLabels = listOf("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun")
+
+    Column(modifier = modifier) {
+        // Day-of-week header
+        Row(modifier = Modifier.fillMaxWidth()) {
+            dayLabels.forEach { label ->
+                Text(
+                    text = label,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.weight(1f),
+                )
+            }
+        }
+
+        Spacer(modifier = Modifier.height(4.dp))
+
+        if (isLoading) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(140.dp),
+                contentAlignment = Alignment.Center,
+            ) {
+                CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 2.dp)
+            }
+        } else {
+            // Build cell list: blank prefix + days
+            val totalCells = startOffset + daysInMonth
+            val rows = (totalCells + 6) / 7
+
+            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                for (row in 0 until rows) {
+                    Row(modifier = Modifier.fillMaxWidth()) {
+                        for (col in 0 until 7) {
+                            val cellIndex = row * 7 + col
+                            val dayNumber = cellIndex - startOffset + 1
+                            if (dayNumber < 1 || dayNumber > daysInMonth) {
+                                Spacer(modifier = Modifier.weight(1f))
+                            } else {
+                                val date = yearMonth.atDay(dayNumber)
+                                val dateStr = date.format(dateFormatter)
+                                val isSelected = dateStr == selectedDate
+                                val isCurrentDay = date == today
+                                val dayTotal = dayTotals[dateStr]
+
+                                CalendarDayCell(
+                                    dayNumber = dayNumber,
+                                    isSelected = isSelected,
+                                    isToday = isCurrentDay,
+                                    isFuture = date.isAfter(today),
+                                    expense = dayTotal?.expense ?: 0L,
+                                    income = dayTotal?.income ?: 0L,
+                                    onClick = { onDayClick(dateStr) },
+                                    modifier = Modifier.weight(1f),
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun CalendarDayCell(
+    dayNumber: Int,
+    isSelected: Boolean,
+    isToday: Boolean,
+    isFuture: Boolean,
+    expense: Long,
+    income: Long,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val hasData = expense > 0L || income > 0L
+    val containerColor = when {
+        isSelected -> MaterialTheme.colorScheme.primary
+        isToday -> MaterialTheme.colorScheme.primaryContainer
+        else -> Color.Transparent
+    }
+    val textColor = when {
+        isSelected -> MaterialTheme.colorScheme.onPrimary
+        isFuture -> MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f)
+        else -> MaterialTheme.colorScheme.onSurface
+    }
+    val dotExpenseColor = if (isSelected) {
+        MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.85f)
+    } else {
+        MaterialTheme.colorScheme.error
+    }
+    val dotIncomeColor = if (isSelected) {
+        MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.85f)
+    } else {
+        MaterialTheme.colorScheme.tertiary
+    }
+
+    Column(
+        modifier = modifier
+            .aspectRatio(0.75f)
+            .clip(RoundedCornerShape(8.dp))
+            .background(containerColor)
+            .then(
+                if (isToday && !isSelected) {
+                    Modifier.border(1.dp, MaterialTheme.colorScheme.primary, RoundedCornerShape(8.dp))
+                } else {
+                    Modifier
+                },
+            )
+            .clickable(enabled = !isFuture, onClick = onClick)
+            .padding(2.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.SpaceBetween,
+    ) {
+        Text(
+            text = dayNumber.toString(),
+            style = MaterialTheme.typography.labelMedium,
+            fontWeight = if (isSelected || isToday) FontWeight.Bold else FontWeight.Normal,
+            color = textColor,
+        )
+
+        if (hasData && !isFuture) {
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(1.dp),
+            ) {
+                if (expense > 0L) {
+                    Box(
+                        modifier = Modifier
+                            .height(3.dp)
+                            .fillMaxWidth(0.6f)
+                            .clip(CircleShape)
+                            .background(dotExpenseColor),
+                    )
+                }
+                if (income > 0L) {
+                    Box(
+                        modifier = Modifier
+                            .height(3.dp)
+                            .fillMaxWidth(0.6f)
+                            .clip(CircleShape)
+                            .background(dotIncomeColor),
+                    )
+                }
+            }
+        } else {
+            Spacer(modifier = Modifier.height(4.dp))
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Quick month picker bottom sheet
+// ---------------------------------------------------------------------------
+
+@RequiresApi(Build.VERSION_CODES.O)
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun MonthPickerBottomSheet(
+    currentYearMonth: String,
+    onMonthSelected: (String) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    val current = YearMonth.parse(currentYearMonth)
+    val today = YearMonth.now()
+    var displayYear by remember { mutableStateOf(current.year) }
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val monthFormatter = DateTimeFormatter.ofPattern("yyyy-MM")
+
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = sheetState,
+        containerColor = MaterialTheme.colorScheme.surface,
+        shape = RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp),
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 20.dp, vertical = 8.dp)
+                .padding(bottom = 24.dp),
+        ) {
+            Text(
+                text = stringResource(R.string.label_select_month),
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onSurface,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 16.dp),
+                textAlign = TextAlign.Center,
+            )
+
+            // Year navigation
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.Center,
+            ) {
+                IconButton(onClick = { displayYear-- }) {
+                    Icon(
+                        Icons.AutoMirrored.Filled.KeyboardArrowLeft,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                Text(
+                    text = displayYear.toString(),
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    modifier = Modifier.width(80.dp),
+                    textAlign = TextAlign.Center,
+                )
+                IconButton(
+                    onClick = { displayYear++ },
+                    enabled = displayYear < today.year + 1,
+                ) {
+                    Icon(
+                        Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                        contentDescription = null,
+                        tint = if (displayYear < today.year + 1) {
+                            MaterialTheme.colorScheme.onSurfaceVariant
+                        } else {
+                            MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f)
+                        },
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            // Month grid — 3 columns × 4 rows
+            val months = (1..12).map { YearMonth.of(displayYear, it) }
+            LazyVerticalGrid(
+                columns = GridCells.Fixed(3),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                items(months) { ym ->
+                    val isSelected = ym.format(monthFormatter) == currentYearMonth
+                    val isFuture = ym.isAfter(today)
+                    val containerColor = when {
+                        isSelected -> MaterialTheme.colorScheme.primary
+                        else -> MaterialTheme.colorScheme.surfaceVariant
+                    }
+                    val textColor = when {
+                        isSelected -> MaterialTheme.colorScheme.onPrimary
+                        isFuture -> MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.35f)
+                        else -> MaterialTheme.colorScheme.onSurface
+                    }
+
+                    Surface(
+                        shape = RoundedCornerShape(12.dp),
+                        color = containerColor,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(12.dp))
+                            .clickable(enabled = !isFuture) {
+                                onMonthSelected(ym.format(monthFormatter))
+                            },
+                    ) {
+                        Text(
+                            text = ym.month.getDisplayName(TextStyle.SHORT, Locale.getDefault()),
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                            color = textColor,
+                            textAlign = TextAlign.Center,
+                            modifier = Modifier.padding(vertical = 14.dp),
+                        )
+                    }
+                }
+            }
+        }
+    }
 }
 
 @Composable
@@ -1447,7 +1917,14 @@ private fun SpendingCardsPanel(
                     ),
                 ),
                 dayTotal = com.bossxomlut.dragspend.data.model.DayTotal("2026-03-17", 0, 150_000),
+                viewMonth = "2026-03",
+                monthDayTotals = emptyMap(),
+                isLoadingMonthlyTotals = false,
+                showCalendarOverview = false,
+                onToggleCalendar = {},
+                onShowMonthPicker = {},
                 onDateChange = {},
+                onMonthChange = {},
                 onEditTransaction = {},
                 onDeleteTransaction = {},
                 onCopyFromYesterday = {},
