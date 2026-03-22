@@ -204,9 +204,25 @@ class TransactionRepositoryImpl(
 
         val withCategories = attachCategories(txns)
 
-        // Client-side filtering (text, category, AND dates as fallback safety)
+        // Client-side filtering (full-text search, category, AND dates)
+        // Full-text: split query into words, search in title + note + category name
+        // All words must match somewhere (AND logic)
+        val searchWords = query.lowercase().split(Regex("\\s+")).filter { it.isNotBlank() }
+
         withCategories.filter { tx ->
-            val matchesQuery = query.isBlank() || tx.title.contains(query, ignoreCase = true)
+            val matchesQuery = if (searchWords.isEmpty()) {
+                true
+            } else {
+                // Combine all searchable text fields
+                val searchableText = buildString {
+                    append(tx.title.lowercase())
+                    append(" ")
+                    tx.note?.let { append(it.lowercase()); append(" ") }
+                    tx.category?.name?.let { append(it.lowercase()) }
+                }
+                // All words must be found in the combined text
+                searchWords.all { word -> searchableText.contains(word) }
+            }
             val matchesCategory = categoryIds.isEmpty() || tx.categoryId in categoryIds
             val matchesDateRange = tx.date >= start && tx.date < exclusiveEnd
             matchesQuery && matchesCategory && matchesDateRange
