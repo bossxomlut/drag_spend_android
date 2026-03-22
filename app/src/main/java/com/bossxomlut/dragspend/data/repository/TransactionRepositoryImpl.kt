@@ -9,6 +9,8 @@ import com.bossxomlut.dragspend.domain.repository.UpdateTransactionRequest
 import com.bossxomlut.dragspend.util.AppLog
 import com.bossxomlut.dragspend.util.logResult
 import io.github.jan.supabase.SupabaseClient
+import java.time.LocalDate
+import java.time.format.DateTimeFormatter
 import io.github.jan.supabase.postgrest.from
 import io.github.jan.supabase.postgrest.postgrest
 import io.github.jan.supabase.postgrest.query.Order
@@ -154,6 +156,62 @@ class TransactionRepositoryImpl(
             .decodeList<Transaction>()
             .let { attachCategories(it) }
     }.logResult(AppLog.Feature.TRANSACTION, "copyFromYesterday") { "${it.size} copied" }
+
+    override suspend fun searchTransactions(
+        userId: String,
+        query: String,
+        categoryIds: Set<String>,
+        startDate: String?,
+        endDate: String?,
+    ): Result<List<Transaction>> = runCatching {
+        AppLog.d(
+            AppLog.Feature.TRANSACTION,
+            "searchTransactions",
+            "userId=${userId.take(8)}, query=$query, categories=$categoryIds, start=$startDate, end=$endDate",
+        )
+
+        // Both dates should always be provided by SearchViewModel (with 3-month default fallback).
+        // Convert endDate to exclusive (endDate + 1 day) for lt() operator.
+        val dateFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd")
+        val start = startDate ?: LocalDate.now().minusMonths(3).format(dateFormatter)
+        val exclusiveEnd = endDate?.let {
+            LocalDate.parse(it, dateFormatter).plusDays(1).format(dateFormatter)
+        } ?: LocalDate.now().plusDays(1).format(dateFormatter)
+
+        AppLog.d(
+            AppLog.Feature.TRANSACTION,
+            "searchTransactions",
+            "Querying with start=$start, exclusiveEnd=$exclusiveEnd",
+        )
+
+        val txns = supabase.from("transactions")
+            .select {
+                filter {
+                    eq("user_id", userId)
+                    gte("date", start)
+                    lt("date", exclusiveEnd)
+                }
+                order("date", order = Order.DESCENDING)
+                order("position", order = Order.ASCENDING)
+            }
+            .decodeList<Transaction>()
+
+        AppLog.d(
+            AppLog.Feature.TRANSACTION,
+            "searchTransactions",
+            "Server returned ${txns.size} transactions",
+        )
+
+        val withCategories = attachCategories(txns)
+
+        // Client-side filtering (text, category, AND dates as fallback safety)
+        withCategories.filter { tx ->
+            val matchesQuery = query.isBlank() || tx.title.contains(query, ignoreCase = true)
+            val matchesCategory = categoryIds.isEmpty() || tx.categoryId in categoryIds
+            val matchesDateRange = tx.date >= start && tx.date < exclusiveEnd
+            matchesQuery && matchesCategory && matchesDateRange
+        }
+    }.logResult(AppLog.Feature.TRANSACTION, "searchTransactions") { "${it.size} items" }
 
     /**
      * Attaches the cached Category object to each transaction that has a category_id.

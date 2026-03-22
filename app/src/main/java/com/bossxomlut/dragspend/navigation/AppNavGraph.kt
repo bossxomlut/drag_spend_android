@@ -27,6 +27,7 @@ import com.bossxomlut.dragspend.ui.screen.dashboard.DashboardViewModel
 import com.bossxomlut.dragspend.ui.screen.dashboard.today.DayDetailScreen
 import com.bossxomlut.dragspend.ui.screen.dashboard.report.CategoryDetailScreen
 import com.bossxomlut.dragspend.ui.screen.onboarding.LanguageScreen
+import com.bossxomlut.dragspend.ui.screen.search.SearchScreen
 import com.bossxomlut.dragspend.ui.screen.settings.SettingsScreen
 import io.github.jan.supabase.SupabaseClient
 import io.github.jan.supabase.auth.auth
@@ -169,6 +170,9 @@ fun AppNavGraph(
                     onNavigateToCategoryDetail = { yearMonth, categoryId, categoryName, categoryIcon ->
                         navController.navigate(Route.CategoryDetail.createRoute(yearMonth, categoryId, categoryName, categoryIcon))
                     },
+                    onNavigateToSearch = {
+                        navController.navigate(Route.Search.route)
+                    },
                 )
             }
 
@@ -238,6 +242,12 @@ fun AppNavGraph(
                             popUpTo(0) { inclusive = true }
                         }
                     },
+                )
+            }
+
+            composable(Route.Search.route) {
+                SearchScreen(
+                    onNavigateBack = { navController.popBackStack() },
                 )
             }
         }

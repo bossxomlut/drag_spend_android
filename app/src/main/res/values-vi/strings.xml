@@ -144,6 +144,18 @@
     <!-- Errors -->
     <string name="error_invalid_amount">Số tiền không hợp lệ (vd: 25k, 1.5m)</string>
 
+    <!-- Search -->
+    <string name="search_title">Tìm kiếm</string>
+    <string name="search_placeholder_name">Tìm theo tên…</string>
+    <string name="search_from_date">Từ ngày</string>
+    <string name="search_to_date">Đến ngày</string>
+    <string name="search_clear_filters">Xóa bộ lọc</string>
+    <string name="search_clear_query">Xóa</string>
+    <string name="search_no_results">Không tìm thấy giao dịch nào.
+Thử thay đổi bộ lọc.</string>
+    <string name="search_hint">Nhập tên, chọn danh mục
+hoặc khoảng thời gian để tìm kiếm.</string>
+
     <!-- Plurals -->
     <plurals name="transaction_count">
         <item quantity="other">%d giao dịch</item>

@@ -24,4 +24,6 @@ sealed class Route(val route: String) {
             return "category_detail/$yearMonth/$categoryId/$encodedName/$encodedIcon"
         }
     }
+
+    data object Search : Route("search")
 }

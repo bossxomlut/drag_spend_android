@@ -58,4 +58,11 @@ interface TransactionRepository {
     suspend fun updateTransaction(transactionId: String, request: UpdateTransactionRequest): Result<Transaction>
     suspend fun deleteTransaction(transactionId: String): Result<Unit>
     suspend fun copyFromYesterday(userId: String, fromDate: String, toDate: String): Result<List<Transaction>>
+    suspend fun searchTransactions(
+        userId: String,
+        query: String,
+        categoryIds: Set<String>,
+        startDate: String?,
+        endDate: String?,
+    ): Result<List<Transaction>>
 }

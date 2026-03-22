@@ -144,6 +144,18 @@
     <!-- Errors -->
     <string name="error_invalid_amount">Invalid amount (e.g. 25k, 1.5m)</string>
 
+    <!-- Search -->
+    <string name="search_title">Search</string>
+    <string name="search_placeholder_name">Search by name…</string>
+    <string name="search_from_date">From date</string>
+    <string name="search_to_date">To date</string>
+    <string name="search_clear_filters">Clear</string>
+    <string name="search_clear_query">Clear</string>
+    <string name="search_no_results">No transactions found.
+Try adjusting your filters.</string>
+    <string name="search_hint">Enter a name, choose a category,
+or pick a date range to search.</string>
+
     <!-- Plurals -->
     <plurals name="transaction_count">
         <item quantity="one">%d transaction</item>

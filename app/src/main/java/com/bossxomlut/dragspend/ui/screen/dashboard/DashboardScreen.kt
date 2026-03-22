@@ -41,6 +41,7 @@ fun DashboardScreen(
     onNavigateToSettings: () -> Unit,
     onNavigateToDayDetail: (date: String) -> Unit = {},
     onNavigateToCategoryDetail: (yearMonth: String, categoryId: String, categoryName: String, categoryIcon: String) -> Unit = { _, _, _, _ -> },
+    onNavigateToSearch: () -> Unit = {},
     dashboardViewModel: DashboardViewModel = koinViewModel(),
 ) {
     var selectedTab by rememberSaveable { mutableIntStateOf(0) }
@@ -101,6 +102,7 @@ fun DashboardScreen(
             0 -> TodayScreen(
                 dashboardViewModel = dashboardViewModel,
                 onNavigateToSettings = onNavigateToSettings,
+                onNavigateToSearch = onNavigateToSearch,
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(padding),

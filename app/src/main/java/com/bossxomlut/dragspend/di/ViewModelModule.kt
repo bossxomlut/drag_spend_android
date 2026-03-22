@@ -7,6 +7,7 @@ import com.bossxomlut.dragspend.ui.screen.dashboard.report.ReportViewModel
 import com.bossxomlut.dragspend.ui.screen.dashboard.today.DayDetailViewModel
 import com.bossxomlut.dragspend.ui.screen.dashboard.today.TodayViewModel
 import com.bossxomlut.dragspend.ui.screen.onboarding.OnboardingViewModel
+import com.bossxomlut.dragspend.ui.screen.search.SearchViewModel
 import com.bossxomlut.dragspend.ui.screen.settings.SettingsViewModel
 import com.bossxomlut.dragspend.util.AppPreferences
 import org.koin.android.ext.koin.androidApplication
@@ -24,4 +25,5 @@ val viewModelModule = module {
     viewModel { CategoryDetailViewModel(get(), get()) }
     viewModel { ReportViewModel(get(), get()) }
     viewModel { SettingsViewModel(androidApplication(), get(), get(), get()) }
+    viewModel { SearchViewModel(get(), get(), get()) }
 }

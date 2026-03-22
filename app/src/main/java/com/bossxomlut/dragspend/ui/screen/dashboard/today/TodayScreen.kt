@@ -63,6 +63,7 @@ import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.GridView
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material3.BottomSheetScaffold
 import androidx.compose.material3.Button
@@ -157,6 +158,7 @@ import org.koin.androidx.compose.koinViewModel
 fun TodayScreen(
     dashboardViewModel: DashboardViewModel,
     onNavigateToSettings: () -> Unit,
+    onNavigateToSearch: () -> Unit = {},
     modifier: Modifier = Modifier,
     todayViewModel: TodayViewModel = koinViewModel(),
 ) {
@@ -326,6 +328,14 @@ fun TodayScreen(
                             }
                         }
                         // Profile icon
+                        IconButton(onClick = onNavigateToSearch) {
+                            Icon(
+                                imageVector = Icons.Default.Search,
+                                contentDescription = stringResource(R.string.search_title),
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.size(24.dp),
+                            )
+                        }
                         IconButton(onClick = onNavigateToSettings) {
                             Icon(
                                 imageVector = Icons.Default.AccountCircle,
