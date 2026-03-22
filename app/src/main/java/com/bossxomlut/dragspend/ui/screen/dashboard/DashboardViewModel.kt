@@ -41,6 +41,12 @@ class DashboardViewModel(
     private val _dirtyReportMonths = MutableStateFlow<Set<String>>(emptySet())
     val dirtyReportMonths: StateFlow<Set<String>> = _dirtyReportMonths.asStateFlow()
 
+    /**
+     * Individual dates mutated on DayDetailScreen so TodayScreen can invalidate its cache.
+     */
+    private val _dirtyDays = MutableStateFlow<Set<String>>(emptySet())
+    val dirtyDays: StateFlow<Set<String>> = _dirtyDays.asStateFlow()
+
     val currentUserId: String?
         get() = supabase.auth.currentUserOrNull()?.id
 
@@ -67,6 +73,14 @@ class DashboardViewModel(
 
     fun clearDirtyReportMonth(yearMonth: String) {
         _dirtyReportMonths.update { it - yearMonth }
+    }
+
+    fun markDayDirty(date: String) {
+        _dirtyDays.update { it + date }
+    }
+
+    fun clearDirtyDay(date: String) {
+        _dirtyDays.update { it - date }
     }
 
     private fun loadCategories() {

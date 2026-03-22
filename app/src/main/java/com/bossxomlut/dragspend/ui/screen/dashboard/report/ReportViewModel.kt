@@ -23,6 +23,7 @@ data class DailyBarData(
 )
 
 data class CategorySlice(
+    val categoryId: String?,
     val name: String,
     val icon: String,
     val color: String,
@@ -97,6 +98,7 @@ class ReportViewModel(
                 val catKey = row.categoryId ?: "other"
                 val existing = categoryMap[catKey]
                 categoryMap[catKey] = CategorySlice(
+                    categoryId = row.categoryId,
                     name = row.categoryName ?: "Other",
                     icon = row.categoryIcon ?: "📦",
                     color = row.categoryColor ?: "#9E9E9E",

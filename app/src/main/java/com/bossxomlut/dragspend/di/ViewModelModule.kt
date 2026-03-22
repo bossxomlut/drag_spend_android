@@ -2,7 +2,9 @@ package com.bossxomlut.dragspend.di
 
 import com.bossxomlut.dragspend.ui.screen.auth.AuthViewModel
 import com.bossxomlut.dragspend.ui.screen.dashboard.DashboardViewModel
+import com.bossxomlut.dragspend.ui.screen.dashboard.report.CategoryDetailViewModel
 import com.bossxomlut.dragspend.ui.screen.dashboard.report.ReportViewModel
+import com.bossxomlut.dragspend.ui.screen.dashboard.today.DayDetailViewModel
 import com.bossxomlut.dragspend.ui.screen.dashboard.today.TodayViewModel
 import com.bossxomlut.dragspend.ui.screen.onboarding.OnboardingViewModel
 import com.bossxomlut.dragspend.ui.screen.settings.SettingsViewModel
@@ -18,6 +20,8 @@ val viewModelModule = module {
     viewModel { OnboardingViewModel(get(), get()) }
     viewModel { DashboardViewModel(get(), get()) }
     viewModel { TodayViewModel(get(), get(), get()) }
+    viewModel { DayDetailViewModel(get(), get()) }
+    viewModel { CategoryDetailViewModel(get(), get()) }
     viewModel { ReportViewModel(get(), get()) }
     viewModel { SettingsViewModel(androidApplication(), get(), get(), get()) }
 }

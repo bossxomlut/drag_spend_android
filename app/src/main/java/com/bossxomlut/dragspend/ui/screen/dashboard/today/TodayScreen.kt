@@ -163,6 +163,7 @@ fun TodayScreen(
     val uiState by todayViewModel.uiState.collectAsStateWithLifecycle()
     val selectedDate by dashboardViewModel.selectedDate.collectAsStateWithLifecycle()
     val categories by dashboardViewModel.categories.collectAsStateWithLifecycle()
+    val dirtyDays by dashboardViewModel.dirtyDays.collectAsStateWithLifecycle()
     var toastMessage by remember { mutableStateOf<String?>(null) }
     val userId = dashboardViewModel.currentUserId ?: ""
     val language = "vi"
@@ -172,6 +173,15 @@ fun TodayScreen(
     LaunchedEffect(selectedDate) {
         todayViewModel.loadData(selectedDate)
         addedCardIds = setOf()
+    }
+
+    // Re-fetch when DayDetailScreen mutates transactions for the current date
+    LaunchedEffect(dirtyDays) {
+        if (selectedDate in dirtyDays) {
+            todayViewModel.invalidateDayCache(selectedDate)
+            todayViewModel.loadData(selectedDate)
+            dashboardViewModel.clearDirtyDay(selectedDate)
+        }
     }
 
     LaunchedEffect(uiState.errorMessage) {

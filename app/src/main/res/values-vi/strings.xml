@@ -93,6 +93,12 @@
     <string name="report_net_balance">Số dư ròng</string>
     <string name="report_legend_expense">Chi tiêu</string>
     <string name="report_legend_income">Thu nhập</string>
+    <string name="report_day_label">Ngày %1$d</string>
+    <string name="day_detail_enable_edit">Bật chỉnh sửa</string>
+    <string name="day_detail_disable_edit">Tắt chỉnh sửa</string>
+    <string name="day_detail_edit_mode_hint">Chế độ sửa: nhấn vào giao dịch để sửa hoặc xóa, nhấn + để thêm mới.</string>
+    <string name="category_other">Khác</string>
+    <string name="report_view_category_transactions">Xem giao dịch</string>
     <string name="action_previous_month">Tháng trước</string>
     <string name="action_next_month">Tháng sau</string>
     <string name="action_toggle_calendar">Xem tổng quan tháng</string>

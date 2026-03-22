@@ -93,6 +93,12 @@
     <string name="report_net_balance">Net Balance</string>
     <string name="report_legend_expense">Expense</string>
     <string name="report_legend_income">Income</string>
+    <string name="report_day_label">Day %1$d</string>
+    <string name="day_detail_enable_edit">Enable editing</string>
+    <string name="day_detail_disable_edit">Disable editing</string>
+    <string name="day_detail_edit_mode_hint">Edit mode: tap a transaction to edit or delete it, or press + to add new.</string>
+    <string name="category_other">Other</string>
+    <string name="report_view_category_transactions">View transactions</string>
     <string name="action_previous_month">Previous month</string>
     <string name="action_next_month">Next month</string>
     <string name="action_toggle_calendar">Toggle monthly overview</string>

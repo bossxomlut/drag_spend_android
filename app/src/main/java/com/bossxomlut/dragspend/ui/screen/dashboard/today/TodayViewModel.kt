@@ -150,6 +150,14 @@ class TodayViewModel(
         loadMonthlyTotals(yearMonth)
     }
 
+    /**
+     * Removes [date] from the daily transactions cache so the next [loadData] call re-fetches.
+     */
+    fun invalidateDayCache(date: String) {
+        dailyTransactionsCache.remove(date)
+        AppLog.d(AppLog.Feature.TRANSACTION, "invalidateDayCache", "date=$date")
+    }
+
     private fun loadCards(userId: String) {
         AppLog.d(AppLog.Feature.CARD, "loadCards", "userId=${userId.take(8)}")
         viewModelScope.launch {

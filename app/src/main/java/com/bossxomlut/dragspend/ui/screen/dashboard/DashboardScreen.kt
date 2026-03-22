@@ -39,6 +39,8 @@ private data class DashboardTab(
 fun DashboardScreen(
     onSignOut: () -> Unit,
     onNavigateToSettings: () -> Unit,
+    onNavigateToDayDetail: (date: String) -> Unit = {},
+    onNavigateToCategoryDetail: (yearMonth: String, categoryId: String, categoryName: String, categoryIcon: String) -> Unit = { _, _, _, _ -> },
     dashboardViewModel: DashboardViewModel = koinViewModel(),
 ) {
     var selectedTab by rememberSaveable { mutableIntStateOf(0) }
@@ -105,6 +107,8 @@ fun DashboardScreen(
             )
             1 -> ReportScreen(
                 dashboardViewModel = dashboardViewModel,
+                onNavigateToDayDetail = onNavigateToDayDetail,
+                onNavigateToCategoryDetail = onNavigateToCategoryDetail,
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(padding),

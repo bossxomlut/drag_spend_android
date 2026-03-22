@@ -8,4 +8,20 @@ sealed class Route(val route: String) {
     data object Dashboard : Route("dashboard")
     data object Settings : Route("settings")
     data object AccountDeleted : Route("account_deleted")
+    data object DayDetail : Route("day_detail/{date}") {
+        fun createRoute(date: String) = "day_detail/$date"
+    }
+
+    data object CategoryDetail : Route("category_detail/{yearMonth}/{categoryId}/{categoryName}/{categoryIcon}") {
+        fun createRoute(
+            yearMonth: String,
+            categoryId: String,
+            categoryName: String,
+            categoryIcon: String,
+        ): String {
+            val encodedName = java.net.URLEncoder.encode(categoryName, "UTF-8")
+            val encodedIcon = java.net.URLEncoder.encode(categoryIcon, "UTF-8")
+            return "category_detail/$yearMonth/$categoryId/$encodedName/$encodedIcon"
+        }
+    }
 }

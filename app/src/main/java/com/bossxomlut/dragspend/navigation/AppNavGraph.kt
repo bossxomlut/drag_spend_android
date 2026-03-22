@@ -13,14 +13,19 @@ import androidx.compose.ui.platform.LocalContext
 import android.content.res.Configuration
 import java.util.Locale
 import androidx.navigation.NavHostController
+import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
+import androidx.navigation.navArgument
 import com.bossxomlut.dragspend.data.model.Profile
 import com.bossxomlut.dragspend.ui.screen.account.AccountDeletedScreen
 import com.bossxomlut.dragspend.ui.screen.auth.ForgotPasswordScreen
 import com.bossxomlut.dragspend.ui.screen.auth.LoginScreen
 import com.bossxomlut.dragspend.ui.screen.auth.RegisterScreen
 import com.bossxomlut.dragspend.ui.screen.dashboard.DashboardScreen
+import com.bossxomlut.dragspend.ui.screen.dashboard.DashboardViewModel
+import com.bossxomlut.dragspend.ui.screen.dashboard.today.DayDetailScreen
+import com.bossxomlut.dragspend.ui.screen.dashboard.report.CategoryDetailScreen
 import com.bossxomlut.dragspend.ui.screen.onboarding.LanguageScreen
 import com.bossxomlut.dragspend.ui.screen.settings.SettingsScreen
 import io.github.jan.supabase.SupabaseClient
@@ -28,6 +33,7 @@ import io.github.jan.supabase.auth.auth
 import io.github.jan.supabase.auth.status.SessionStatus
 import io.github.jan.supabase.postgrest.from
 import kotlinx.coroutines.flow.first
+import org.koin.androidx.compose.koinViewModel
 
 enum class StartDestination {
     CHECKING,
@@ -157,6 +163,54 @@ fun AppNavGraph(
                     onNavigateToSettings = {
                         navController.navigate(Route.Settings.route)
                     },
+                    onNavigateToDayDetail = { date ->
+                        navController.navigate(Route.DayDetail.createRoute(date))
+                    },
+                    onNavigateToCategoryDetail = { yearMonth, categoryId, categoryName, categoryIcon ->
+                        navController.navigate(Route.CategoryDetail.createRoute(yearMonth, categoryId, categoryName, categoryIcon))
+                    },
+                )
+            }
+
+            composable(
+                route = Route.DayDetail.route,
+                arguments = listOf(navArgument("date") { type = NavType.StringType }),
+            ) { backStackEntry ->
+                val date = backStackEntry.arguments?.getString("date") ?: return@composable
+                val dashboardEntry = remember(navController) {
+                    navController.getBackStackEntry(Route.Dashboard.route)
+                }
+                val dashVm: DashboardViewModel = koinViewModel(viewModelStoreOwner = dashboardEntry)
+                DayDetailScreen(
+                    date = date,
+                    dashboardViewModel = dashVm,
+                    onNavigateBack = { navController.popBackStack() },
+                )
+            }
+
+            composable(
+                route = Route.CategoryDetail.route,
+                arguments = listOf(
+                    navArgument("yearMonth") { type = NavType.StringType },
+                    navArgument("categoryId") { type = NavType.StringType },
+                    navArgument("categoryName") { type = NavType.StringType },
+                    navArgument("categoryIcon") { type = NavType.StringType },
+                ),
+            ) { backStackEntry ->
+                val yearMonth = backStackEntry.arguments?.getString("yearMonth") ?: return@composable
+                val categoryId = backStackEntry.arguments?.getString("categoryId") ?: return@composable
+                val categoryName = java.net.URLDecoder.decode(
+                    backStackEntry.arguments?.getString("categoryName") ?: "", "UTF-8"
+                )
+                val categoryIcon = java.net.URLDecoder.decode(
+                    backStackEntry.arguments?.getString("categoryIcon") ?: "📦", "UTF-8"
+                )
+                CategoryDetailScreen(
+                    yearMonth = yearMonth,
+                    categoryId = categoryId,
+                    categoryName = categoryName,
+                    categoryIcon = categoryIcon,
+                    onNavigateBack = { navController.popBackStack() },
                 )
             }
 
