@@ -49,6 +49,7 @@ fun AppNavGraph(
     navController: NavHostController,
     supabase: SupabaseClient,
     modifier: Modifier = Modifier,
+    onReady: () -> Unit = {},
 ) {
     var startDestination by remember { mutableStateOf(StartDestination.CHECKING) }
     var selectedLanguage by remember { mutableStateOf("en") }
@@ -61,12 +62,14 @@ fun AppNavGraph(
         val session = supabase.auth.currentSessionOrNull()
         if (session == null) {
             startDestination = StartDestination.LOGIN
+            onReady()
             return@LaunchedEffect
         }
 
         runCatching {
             val userId = session.user?.id ?: run {
                 startDestination = StartDestination.LOGIN
+                onReady()
                 return@LaunchedEffect
             }
             val profile = supabase.from("profiles")
@@ -79,8 +82,10 @@ fun AppNavGraph(
                 else -> StartDestination.DASHBOARD
             }
             selectedLanguage = profile?.language ?: "vi"
+            onReady()
         }.onFailure {
             startDestination = StartDestination.LOGIN
+            onReady()
         }
     }
 

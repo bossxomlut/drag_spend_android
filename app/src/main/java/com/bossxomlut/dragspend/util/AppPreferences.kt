@@ -1,6 +1,7 @@
 package com.bossxomlut.dragspend.util
 
 import android.content.Context
+import androidx.appcompat.app.AppCompatDelegate
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
@@ -46,6 +47,18 @@ class AppPreferences(private val context: Context) {
 
     suspend fun setThemeMode(mode: ThemeMode) {
         context.dataStore.edit { prefs -> prefs[KEY_THEME_MODE] = mode.name }
+        // Update system night mode for splash screen on next launch
+        val nightMode = when (mode) {
+            ThemeMode.LIGHT -> AppCompatDelegate.MODE_NIGHT_NO
+            ThemeMode.DARK -> AppCompatDelegate.MODE_NIGHT_YES
+            ThemeMode.SYSTEM -> AppCompatDelegate.MODE_NIGHT_FOLLOW_SYSTEM
+        }
+        AppCompatDelegate.setDefaultNightMode(nightMode)
+        // Also save to SharedPreferences for Application startup
+        context.getSharedPreferences("night_mode_prefs", Context.MODE_PRIVATE)
+            .edit()
+            .putInt("night_mode", nightMode)
+            .apply()
     }
 
     suspend fun setReminderEnabled(enabled: Boolean) {

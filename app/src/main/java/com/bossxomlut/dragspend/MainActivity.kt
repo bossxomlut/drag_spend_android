@@ -32,6 +32,7 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.core.view.WindowCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.compose.rememberNavController
@@ -49,6 +50,7 @@ class MainActivity : ComponentActivity() {
     private val appPreferences: AppPreferences by inject()
 
     private val showSecureOverlay = mutableStateOf(false)
+    private val isAppReady = mutableStateOf(false)
 
     override fun onWindowFocusChanged(hasFocus: Boolean) {
         super.onWindowFocusChanged(hasFocus)
@@ -56,7 +58,12 @@ class MainActivity : ComponentActivity() {
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        val splashScreen = installSplashScreen()
         super.onCreate(savedInstanceState)
+
+        // Keep splash screen visible until app is ready
+        splashScreen.setKeepOnScreenCondition { !isAppReady.value }
+
         createNotificationChannel()
         enableEdgeToEdge()
         setContent {
@@ -86,6 +93,7 @@ class MainActivity : ComponentActivity() {
                     AppNavGraph(
                         navController = navController,
                         supabase = supabase,
+                        onReady = { isAppReady.value = true },
                     )
                 }
 
