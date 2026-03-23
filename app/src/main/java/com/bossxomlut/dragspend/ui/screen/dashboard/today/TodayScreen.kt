@@ -21,10 +21,13 @@ import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -34,6 +37,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -50,6 +54,8 @@ import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.relocation.BringIntoViewRequester
+import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material.icons.Icons
@@ -111,6 +117,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.focus.onFocusEvent
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.layout.boundsInRoot
@@ -144,6 +151,7 @@ import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
 import java.time.format.TextStyle
 import java.util.Locale
+import kotlin.math.abs
 import kotlin.math.roundToInt
 import kotlinx.coroutines.launch
 import org.koin.androidx.compose.koinViewModel
@@ -235,6 +243,7 @@ fun TodayScreen(
             boxRootOrigin = coords.boundsInRoot().topLeft
         },
     ) {
+        val scope = rememberCoroutineScope()
         val bottomSheetScaffoldState = rememberBottomSheetScaffoldState(
             bottomSheetState = rememberStandardBottomSheetState(
                 initialValue = SheetValue.PartiallyExpanded,
@@ -356,6 +365,11 @@ fun TodayScreen(
                     cards = filteredCards,
                     searchQuery = searchQuery,
                     onSearchChange = { searchQuery = it },
+                    onSearchFocused = {
+                        scope.launch {
+                            bottomSheetScaffoldState.bottomSheetState.expand()
+                        }
+                    },
                     onCardAdd = { card, amount ->
                         todayViewModel.addTransactionFromCard(card, selectedDate, amount)
                         addedCardIds = addedCardIds + card.id
@@ -1189,11 +1203,13 @@ private fun MonthPickerBottomSheet(
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun SpendingCardsPanel(
         cards: List<SpendingCard>,
         searchQuery: String,
         onSearchChange: (String) -> Unit,
+        onSearchFocused: () -> Unit,
         onCardAdd: (SpendingCard, Long) -> Unit,
         onCardEdit: (SpendingCard) -> Unit,
         onCardDelete: (SpendingCard) -> Unit,
@@ -1205,10 +1221,15 @@ private fun SpendingCardsPanel(
     ) {
         var selectedType by remember { mutableStateOf(TransactionType.EXPENSE) }
         val displayCards = cards.filter { it.type == selectedType }
+        val scrollState = rememberScrollState()
+        val bringIntoViewRequester = remember { BringIntoViewRequester() }
+        val scope = rememberCoroutineScope()
 
         Column(
             modifier = modifier
                 .fillMaxWidth()
+                .imePadding()
+                .verticalScroll(scrollState)
                 .padding(top = 4.dp, bottom = 8.dp),
         ) {
             // Header row: title + add button
@@ -1255,7 +1276,16 @@ private fun SpendingCardsPanel(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 16.dp)
-                    .height(48.dp),
+                    .height(48.dp)
+                    .bringIntoViewRequester(bringIntoViewRequester)
+                    .onFocusEvent { focusState ->
+                        if (focusState.isFocused) {
+                            onSearchFocused()
+                            scope.launch {
+                                bringIntoViewRequester.bringIntoView()
+                            }
+                        }
+                    },
             )
 
             Spacer(modifier = Modifier.height(8.dp))
@@ -1361,18 +1391,59 @@ private fun SpendingCardsPanel(
                 modifier = Modifier
                     .width(150.dp)
                     .pointerInput(card.id) {
-                        detectDragGestures(
-                            onDragStart = { localOffset ->
-                                val globalOffset = layoutCoordinates?.localToRoot(localOffset) ?: localOffset
-                                onDragStart(globalOffset, selectedAmount)
-                            },
-                            onDrag = { change, dragAmount ->
-                                change.consume()
-                                onDragMove(dragAmount)
-                            },
-                            onDragEnd = { onDragEnd() },
-                            onDragCancel = { onDragEnd() },
-                        )
+                        awaitEachGesture {
+                            val down = awaitFirstDown(requireUnconsumed = false)
+                            var isDragging = false
+                            var totalDragX = 0f
+                            var totalDragY = 0f
+                            val touchSlop = 8f
+
+                            while (true) {
+                                val event = awaitPointerEvent()
+                                val change = event.changes.firstOrNull() ?: break
+
+                                if (!change.pressed) {
+                                    // Finger lifted
+                                    if (isDragging) {
+                                        onDragEnd()
+                                    }
+                                    break
+                                }
+
+                                val dragAmount = change.position - change.previousPosition
+                                totalDragX += dragAmount.x
+                                totalDragY += dragAmount.y
+
+                                if (!isDragging) {
+                                    // Check if we should start dragging or let horizontal scroll handle it
+                                    val absX = abs(totalDragX)
+                                    val absY = abs(totalDragY)
+
+                                    // Only start drag if moving primarily upward (negative Y)
+                                    // and the vertical movement is more than horizontal
+                                    if (absY > touchSlop || absX > touchSlop) {
+                                        if (absX > absY + 2f) {
+                                            // Horizontal scroll - don't consume, let LazyRow handle it
+                                            break
+                                        } else if (totalDragY < -touchSlop && absY > absX + 2f) {
+                                            // Upward drag detected - start dragging
+                                            isDragging = true
+                                            val localOffset = down.position
+                                            val globalOffset = layoutCoordinates?.localToRoot(localOffset) ?: localOffset
+                                            onDragStart(globalOffset, selectedAmount)
+                                            change.consume()
+                                        } else if (totalDragY > touchSlop) {
+                                            // Downward drag - don't start drag
+                                            break
+                                        }
+                                    }
+                                } else {
+                                    // Already dragging - consume and report movement
+                                    change.consume()
+                                    onDragMove(dragAmount)
+                                }
+                            }
+                        }
                     },
                 shape = RoundedCornerShape(16.dp),
                 elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
@@ -1863,6 +1934,7 @@ private fun SpendingCardsPanelPreview() {
             ),
             searchQuery = "",
             onSearchChange = {},
+            onSearchFocused = {},
             onCardAdd = { _, _ -> },
             onCardEdit = {},
             onCardDelete = {},
