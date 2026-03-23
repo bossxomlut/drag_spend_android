@@ -54,13 +54,31 @@ fun AppNavGraph(
     var startDestination by remember { mutableStateOf(StartDestination.CHECKING) }
     var selectedLanguage by remember { mutableStateOf("en") }
 
+    val context = LocalContext.current
+
     LaunchedEffect(Unit) {
         // Wait for Auth to finish loading the persisted session from storage
         supabase.auth.sessionStatus
             .first { it !is SessionStatus.Initializing }
 
         val session = supabase.auth.currentSessionOrNull()
+
+        // If Supabase reports no session, check if we have a stored session for offline mode
         if (session == null) {
+            val sessionManager = com.bossxomlut.dragspend.util.SharedPreferencesSessionManager(context)
+            val storedUserId = sessionManager.getStoredUserId()
+
+            if (storedUserId != null) {
+                // We have a stored session (user was logged in before)
+                // Allow offline mode with local data
+                startDestination = StartDestination.DASHBOARD
+                selectedLanguage = context.getSharedPreferences("app_prefs", android.content.Context.MODE_PRIVATE)
+                    .getString("language", "vi") ?: "vi"
+                onReady()
+                return@LaunchedEffect
+            }
+
+            // No stored session, must login
             startDestination = StartDestination.LOGIN
             onReady()
             return@LaunchedEffect
@@ -82,9 +100,27 @@ fun AppNavGraph(
                 else -> StartDestination.DASHBOARD
             }
             selectedLanguage = profile?.language ?: "vi"
+
+            // Save language preference for offline access
+            context.getSharedPreferences("app_prefs", android.content.Context.MODE_PRIVATE)
+                .edit()
+                .putString("language", selectedLanguage)
+                .apply()
+
             onReady()
         }.onFailure {
-            startDestination = StartDestination.LOGIN
+            // Network error while fetching profile - check for offline mode
+            val sessionManager = com.bossxomlut.dragspend.util.SharedPreferencesSessionManager(context)
+            val storedUserId = sessionManager.getStoredUserId()
+
+            if (storedUserId != null) {
+                // Allow offline mode
+                startDestination = StartDestination.DASHBOARD
+                selectedLanguage = context.getSharedPreferences("app_prefs", android.content.Context.MODE_PRIVATE)
+                    .getString("language", "vi") ?: "vi"
+            } else {
+                startDestination = StartDestination.LOGIN
+            }
             onReady()
         }
     }
@@ -99,7 +135,6 @@ fun AppNavGraph(
         StartDestination.CHECKING -> Route.Login.route
     }
 
-    val context = LocalContext.current
     val activityResultRegistryOwner = LocalActivityResultRegistryOwner.current
     val localizedContext = remember(selectedLanguage) {
         val locale = Locale.forLanguageTag(selectedLanguage)

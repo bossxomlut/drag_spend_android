@@ -2,6 +2,7 @@ package com.bossxomlut.dragspend.ui.screen.dashboard
 
 import android.content.res.Configuration.UI_MODE_NIGHT_NO
 import android.content.res.Configuration.UI_MODE_NIGHT_YES
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
@@ -14,6 +15,7 @@ import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -26,6 +28,7 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import org.koin.androidx.compose.koinViewModel
 import com.bossxomlut.dragspend.R
+import com.bossxomlut.dragspend.ui.component.OfflineBanner
 import com.bossxomlut.dragspend.ui.screen.dashboard.report.ReportScreen
 import com.bossxomlut.dragspend.ui.screen.dashboard.today.TodayScreen
 import com.bossxomlut.dragspend.ui.theme.DragSpendTheme
@@ -45,6 +48,7 @@ fun DashboardScreen(
     dashboardViewModel: DashboardViewModel = koinViewModel(),
 ) {
     var selectedTab by rememberSaveable { mutableIntStateOf(0) }
+    val isOffline by dashboardViewModel.isOffline.collectAsState()
 
     val tabs = listOf(
         DashboardTab(
@@ -98,23 +102,28 @@ fun DashboardScreen(
             }
         },
     ) { padding ->
-        when (selectedTab) {
-            0 -> TodayScreen(
-                dashboardViewModel = dashboardViewModel,
-                onNavigateToSettings = onNavigateToSettings,
-                onNavigateToSearch = onNavigateToSearch,
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(padding),
-            )
-            1 -> ReportScreen(
-                dashboardViewModel = dashboardViewModel,
-                onNavigateToDayDetail = onNavigateToDayDetail,
-                onNavigateToCategoryDetail = onNavigateToCategoryDetail,
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(padding),
-            )
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(padding),
+        ) {
+            // Offline banner at the top
+            OfflineBanner(isOffline = isOffline)
+
+            when (selectedTab) {
+                0 -> TodayScreen(
+                    dashboardViewModel = dashboardViewModel,
+                    onNavigateToSettings = onNavigateToSettings,
+                    onNavigateToSearch = onNavigateToSearch,
+                    modifier = Modifier.fillMaxSize(),
+                )
+                1 -> ReportScreen(
+                    dashboardViewModel = dashboardViewModel,
+                    onNavigateToDayDetail = onNavigateToDayDetail,
+                    onNavigateToCategoryDetail = onNavigateToCategoryDetail,
+                    modifier = Modifier.fillMaxSize(),
+                )
+            }
         }
     }
 }

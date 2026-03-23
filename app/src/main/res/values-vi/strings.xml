@@ -160,4 +160,9 @@ Nhiều từ: tất cả phải khớp.</string>
     <plurals name="transaction_count">
         <item quantity="other">%d giao dịch</item>
     </plurals>
+
+    <!-- Offline / Sync -->
+    <string name="offline_banner_message">Không có kết nối internet. Thay đổi sẽ được đồng bộ khi có mạng.</string>
+    <string name="sync_status_pending">Chưa đồng bộ</string>
+    <string name="sync_status_syncing">Đang đồng bộ…</string>
 </resources>

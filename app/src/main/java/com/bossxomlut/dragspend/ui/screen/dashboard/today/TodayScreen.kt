@@ -134,6 +134,7 @@ import com.bossxomlut.dragspend.ui.components.AppToast
 import com.bossxomlut.dragspend.ui.components.CategoryIcon
 import com.bossxomlut.dragspend.ui.components.ConfirmDialog
 import com.bossxomlut.dragspend.ui.components.ToastType
+import com.bossxomlut.dragspend.ui.component.SyncStatusIcon
 import com.bossxomlut.dragspend.ui.screen.dashboard.DashboardViewModel
 import com.bossxomlut.dragspend.ui.theme.DragSpendTheme
 import com.bossxomlut.dragspend.util.CurrencyFormatter
@@ -1575,12 +1576,22 @@ private fun SpendingCardsPanel(
                         }
 
                         Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                text = transaction.title,
-                                style = MaterialTheme.typography.bodyMedium,
-                                fontWeight = FontWeight.Medium,
-                                color = MaterialTheme.colorScheme.onSurface,
-                            )
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Text(
+                                    text = transaction.title,
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    fontWeight = FontWeight.Medium,
+                                    color = MaterialTheme.colorScheme.onSurface,
+                                    modifier = Modifier.weight(1f, fill = false),
+                                )
+                                // Sync status indicator
+                                SyncStatusIcon(
+                                    syncStatus = transaction.syncStatus,
+                                    modifier = Modifier.padding(start = 4.dp),
+                                )
+                            }
                             transaction.note?.let { note ->
                                 if (note.isNotBlank()) {
                                     Text(

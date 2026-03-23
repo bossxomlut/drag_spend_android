@@ -19,11 +19,11 @@ val viewModelModule = module {
     single { AppPreferences(androidContext()) }
     viewModel { AuthViewModel(get(), get()) }
     viewModel { OnboardingViewModel(get(), get()) }
-    viewModel { DashboardViewModel(get(), get()) }
+    viewModel { DashboardViewModel(get(), get(), get()) }
     viewModel { TodayViewModel(get(), get(), get()) }
     viewModel { DayDetailViewModel(get(), get()) }
     viewModel { CategoryDetailViewModel(get(), get()) }
     viewModel { ReportViewModel(get(), get()) }
-    viewModel { SettingsViewModel(androidApplication(), get(), get(), get()) }
+    viewModel { SettingsViewModel(androidApplication(), get(), get(), get(), get()) }
     viewModel { SearchViewModel(get(), get(), get()) }
 }

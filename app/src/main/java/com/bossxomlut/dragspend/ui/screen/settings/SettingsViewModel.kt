@@ -9,6 +9,7 @@ import com.bossxomlut.dragspend.util.AppLog
 import com.bossxomlut.dragspend.util.AppPreferences
 import com.bossxomlut.dragspend.util.ReminderScheduler
 import com.bossxomlut.dragspend.util.ThemeMode
+import com.bossxomlut.dragspend.util.UserIdProvider
 import com.bossxomlut.dragspend.util.toFriendlyMessage
 import io.github.jan.supabase.SupabaseClient
 import io.github.jan.supabase.auth.auth
@@ -35,6 +36,7 @@ class SettingsViewModel(
     private val supabase: SupabaseClient,
     private val profileRepository: ProfileRepository,
     private val appPreferences: AppPreferences,
+    private val userIdProvider: UserIdProvider,
 ) : AndroidViewModel(application) {
 
     private val _uiState = MutableStateFlow(SettingsUiState())
@@ -57,11 +59,12 @@ class SettingsViewModel(
     }
 
     private fun loadProfile() {
-        val user = supabase.auth.currentUserOrNull() ?: return
-        AppLog.d(AppLog.Feature.SETTINGS, "loadProfile", "userId=${user.id.take(8)}")
-        _uiState.update { it.copy(email = user.email ?: "", isLoading = true) }
+        val userId = userIdProvider.getCurrentUserId() ?: return
+        val email = supabase.auth.currentUserOrNull()?.email ?: ""
+        AppLog.d(AppLog.Feature.SETTINGS, "loadProfile", "userId=${userId.take(8)}")
+        _uiState.update { it.copy(email = email, isLoading = true) }
         viewModelScope.launch {
-            profileRepository.getProfile(user.id)
+            profileRepository.getProfile(userId)
                 .onSuccess { profile ->
                     _uiState.update {
                         it.copy(
@@ -78,7 +81,7 @@ class SettingsViewModel(
     }
 
     fun updateName(name: String) {
-        val userId = supabase.auth.currentUserOrNull()?.id ?: return
+        val userId = userIdProvider.getCurrentUserId() ?: return
         AppLog.d(AppLog.Feature.SETTINGS, "updateName", "name=$name")
         viewModelScope.launch {
             profileRepository.updateName(userId, name.trim())
@@ -88,7 +91,7 @@ class SettingsViewModel(
     }
 
     fun setLanguage(language: String) {
-        val userId = supabase.auth.currentUserOrNull()?.id ?: return
+        val userId = userIdProvider.getCurrentUserId() ?: return
         AppLog.d(AppLog.Feature.SETTINGS, "setLanguage", "language=$language")
         _uiState.update { it.copy(language = language) }
         viewModelScope.launch {
@@ -138,7 +141,7 @@ class SettingsViewModel(
     }
 
     fun deleteAccount() {
-        val userId = supabase.auth.currentUserOrNull()?.id ?: return
+        val userId = userIdProvider.getCurrentUserId() ?: return
         AppLog.d(AppLog.Feature.SETTINGS, "deleteAccount", "userId=${userId.take(8)}")
         viewModelScope.launch {
             profileRepository.softDeleteAccount(userId)

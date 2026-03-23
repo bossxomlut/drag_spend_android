@@ -13,6 +13,23 @@ import org.koin.dsl.module
 val repositoryModule = module {
     single<ProfileRepository> { ProfileRepositoryImpl(get()) }
     single<CategoryRepository> { CategoryRepositoryImpl(get()) }
-    single<CardRepository> { CardRepositoryImpl(get()) }
-    single<TransactionRepository> { TransactionRepositoryImpl(get(), get()) }
+    single<CardRepository> {
+        CardRepositoryImpl(
+            supabase = get(),
+            categoryRepository = get(),
+            spendingCardDao = get(),
+            cardVariantDao = get(),
+            connectivityMonitor = get(),
+            syncManager = get(),
+        )
+    }
+    single<TransactionRepository> {
+        TransactionRepositoryImpl(
+            supabase = get(),
+            categoryRepository = get(),
+            transactionDao = get(),
+            connectivityMonitor = get(),
+            syncManager = get(),
+        )
+    }
 }

@@ -1,7 +1,9 @@
 package com.bossxomlut.dragspend.data.model
 
+import com.bossxomlut.dragspend.data.local.entity.SyncStatus
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.Transient
 
 @Serializable
 data class Transaction(
@@ -18,6 +20,8 @@ data class Transaction(
     @SerialName("created_at") val createdAt: String? = null,
     @SerialName("updated_at") val updatedAt: String? = null,
     val category: Category? = null,
+    // Not serialized - only used for local UI state
+    @Transient val syncStatus: SyncStatus = SyncStatus.SYNCED,
 )
 
 data class DayTotal(

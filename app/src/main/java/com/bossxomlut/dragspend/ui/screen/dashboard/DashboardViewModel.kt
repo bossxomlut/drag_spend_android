@@ -4,13 +4,16 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.bossxomlut.dragspend.data.model.Category
 import com.bossxomlut.dragspend.data.model.TransactionType
+import com.bossxomlut.dragspend.data.sync.ConnectivityState
 import com.bossxomlut.dragspend.domain.repository.CategoryRepository
 import com.bossxomlut.dragspend.util.AppLog
-import io.github.jan.supabase.SupabaseClient
-import io.github.jan.supabase.auth.auth
+import com.bossxomlut.dragspend.util.UserIdProvider
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.time.LocalDate
@@ -18,8 +21,9 @@ import java.time.YearMonth
 import java.time.format.DateTimeFormatter
 
 class DashboardViewModel(
-    private val supabase: SupabaseClient,
+    private val userIdProvider: UserIdProvider,
     private val categoryRepository: CategoryRepository,
+    private val connectivityState: ConnectivityState,
 ) : ViewModel() {
 
     private val dateFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd")
@@ -47,8 +51,15 @@ class DashboardViewModel(
     private val _dirtyDays = MutableStateFlow<Set<String>>(emptySet())
     val dirtyDays: StateFlow<Set<String>> = _dirtyDays.asStateFlow()
 
+    /**
+     * Indicates if the device is offline. Used to show offline banner.
+     */
+    val isOffline: StateFlow<Boolean> = connectivityState.isOnline
+        .map { !it }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), !connectivityState.isConnected())
+
     val currentUserId: String?
-        get() = supabase.auth.currentUserOrNull()?.id
+        get() = userIdProvider.getCurrentUserId()
 
     init {
         loadCategories()

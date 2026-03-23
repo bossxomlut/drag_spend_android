@@ -4,9 +4,8 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.bossxomlut.dragspend.data.model.Transaction
 import com.bossxomlut.dragspend.domain.repository.TransactionRepository
+import com.bossxomlut.dragspend.util.UserIdProvider
 import com.bossxomlut.dragspend.util.toFriendlyMessage
-import io.github.jan.supabase.SupabaseClient
-import io.github.jan.supabase.auth.auth
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -20,14 +19,14 @@ data class CategoryDetailUiState(
 )
 
 class CategoryDetailViewModel(
-    private val supabase: SupabaseClient,
+    private val userIdProvider: UserIdProvider,
     private val transactionRepository: TransactionRepository,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(CategoryDetailUiState())
     val uiState: StateFlow<CategoryDetailUiState> = _uiState.asStateFlow()
 
-    private val currentUserId get() = supabase.auth.currentUserOrNull()?.id
+    private val currentUserId get() = userIdProvider.getCurrentUserId()
 
     /**
      * Loads all transactions for [yearMonth] and filters them by [categoryId].

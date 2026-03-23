@@ -30,6 +30,7 @@ object AppLog {
         REPORT("DS:REPORT"),
         SETTINGS("DS:SETTINGS"),
         ONBOARDING("DS:ONBOARDING"),
+        SYNC("DS:SYNC"),
     }
 
     /** General info / action start. */
@@ -49,6 +50,12 @@ object AppLog {
         if (!isEnabled) return
         val message = throwable?.message?.takeIf { it.isNotBlank() } ?: detail
         Log.e(feature.tag, "✗ $action | $message", throwable)
+    }
+
+    /** Action failed with a message. */
+    fun e(feature: Feature, action: String, message: String) {
+        if (!isEnabled) return
+        Log.e(feature.tag, "✗ $action | $message")
     }
 
     /** Warning — unexpected but non-fatal state. */

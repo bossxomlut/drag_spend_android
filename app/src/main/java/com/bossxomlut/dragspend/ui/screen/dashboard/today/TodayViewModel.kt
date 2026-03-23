@@ -15,9 +15,8 @@ import com.bossxomlut.dragspend.domain.repository.CreateVariantRequest
 import com.bossxomlut.dragspend.domain.repository.TransactionRepository
 import com.bossxomlut.dragspend.domain.repository.UpdateTransactionRequest
 import com.bossxomlut.dragspend.util.AppLog
+import com.bossxomlut.dragspend.util.UserIdProvider
 import com.bossxomlut.dragspend.util.toFriendlyMessage
-import io.github.jan.supabase.SupabaseClient
-import io.github.jan.supabase.auth.auth
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -48,7 +47,7 @@ data class TodayUiState(
 
 
 class TodayViewModel(
-    private val supabase: SupabaseClient,
+    private val userIdProvider: UserIdProvider,
     private val cardRepository: CardRepository,
     private val transactionRepository: TransactionRepository,
 ) : ViewModel() {
@@ -58,7 +57,7 @@ class TodayViewModel(
 
     @RequiresApi(Build.VERSION_CODES.O)
     private val dateFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd")
-    private val currentUserId get() = supabase.auth.currentUserOrNull()?.id
+    private val currentUserId get() = userIdProvider.getCurrentUserId()
 
     /** Holds the latest debounced loadData job so it can be cancelled on rapid date changes. */
     private var loadDataJob: Job? = null

@@ -161,4 +161,9 @@ Multiple words: all must match.</string>
         <item quantity="one">%d transaction</item>
         <item quantity="other">%d transactions</item>
     </plurals>
+
+    <!-- Offline / Sync -->
+    <string name="offline_banner_message">No internet connection. Changes will sync when online.</string>
+    <string name="sync_status_pending">Not synced</string>
+    <string name="sync_status_syncing">Syncing…</string>
 </resources>

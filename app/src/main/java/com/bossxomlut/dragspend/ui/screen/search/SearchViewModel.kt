@@ -6,8 +6,7 @@ import com.bossxomlut.dragspend.data.model.Category
 import com.bossxomlut.dragspend.data.model.Transaction
 import com.bossxomlut.dragspend.domain.repository.CategoryRepository
 import com.bossxomlut.dragspend.domain.repository.TransactionRepository
-import io.github.jan.supabase.SupabaseClient
-import io.github.jan.supabase.auth.auth
+import com.bossxomlut.dragspend.util.UserIdProvider
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 import kotlinx.coroutines.Job
@@ -33,13 +32,13 @@ data class SearchUiState(
 class SearchViewModel(
     private val transactionRepository: TransactionRepository,
     private val categoryRepository: CategoryRepository,
-    private val supabase: SupabaseClient,
+    private val userIdProvider: UserIdProvider,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(SearchUiState())
     val uiState: StateFlow<SearchUiState> = _uiState.asStateFlow()
 
-    private val currentUserId get() = supabase.auth.currentUserOrNull()?.id
+    private val currentUserId get() = userIdProvider.getCurrentUserId()
 
     init {
         loadCategories()

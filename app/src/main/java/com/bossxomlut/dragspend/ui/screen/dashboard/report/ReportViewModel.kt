@@ -6,9 +6,8 @@ import com.bossxomlut.dragspend.data.model.MonthlyReportRow
 import com.bossxomlut.dragspend.data.model.TransactionType
 import com.bossxomlut.dragspend.domain.repository.TransactionRepository
 import com.bossxomlut.dragspend.util.AppLog
+import com.bossxomlut.dragspend.util.UserIdProvider
 import com.bossxomlut.dragspend.util.toFriendlyMessage
-import io.github.jan.supabase.SupabaseClient
-import io.github.jan.supabase.auth.auth
 import java.time.YearMonth
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -43,14 +42,14 @@ data class ReportUiState(
 
 
 class ReportViewModel(
-    private val supabase: SupabaseClient,
+    private val userIdProvider: UserIdProvider,
     private val transactionRepository: TransactionRepository,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(ReportUiState())
     val uiState: StateFlow<ReportUiState> = _uiState.asStateFlow()
 
-    private val currentUserId get() = supabase.auth.currentUserOrNull()?.id
+    private val currentUserId get() = userIdProvider.getCurrentUserId()
 
     /**
      * In-memory cache: yearMonth ("yyyy-MM") → processed ReportUiState.
