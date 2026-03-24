@@ -39,10 +39,26 @@ jobs:
         with:
           distribution: "temurin"
           java-version: ${{ env.JAVA_VERSION }}
-          cache: gradle
+
+      # ── Gradle cache: deps, wrapper AND build-output cache ──────────────────
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
 
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
+
+      # ── Derive versionName from tag, versionCode from run number ────────────
+      - name: Extract version from tag
+        id: version
+        run: |
+          if [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
+            VERSION_NAME="${GITHUB_REF_NAME#v}"
+          else
+            VERSION_NAME="0.0.${GITHUB_RUN_NUMBER}"
+          fi
+          echo "version_name=${VERSION_NAME}" >> $GITHUB_OUTPUT
+          echo "version_code=${GITHUB_RUN_NUMBER}" >> $GITHUB_OUTPUT
+          echo "Building version ${VERSION_NAME} (code: ${GITHUB_RUN_NUMBER})"
 
       # ── Decode the release keystore stored as a Base64 secret ──────────────
       - name: Decode keystore
@@ -63,11 +79,13 @@ jobs:
       # ── Build the release Android App Bundle ────────────────────────────────
       - name: Build Release AAB
         env:
+          VERSION_CODE: ${{ steps.version.outputs.version_code }}
+          VERSION_NAME: ${{ steps.version.outputs.version_name }}
           KEYSTORE_PATH: ${{ github.workspace }}/app/keystore.jks
           KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
           KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
-        run: ./gradlew bundleRelease --no-daemon
+        run: ./gradlew bundleRelease --no-daemon --build-cache
 
       # ── Keep the AAB as a workflow artifact for audit / manual download ─────
       - name: Upload AAB artifact
