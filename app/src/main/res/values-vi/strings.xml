@@ -27,14 +27,34 @@
     <string name="register_check_email_title">Kiểm tra email</string>
     <string name="register_check_email_body">Chúng tôi đã gửi link xác nhận đến email của bạn. Vui lòng xác thực tài khoản trước khi đăng nhập.</string>
     <string name="forgot_password_title">Quên mật khẩu</string>
-    <string name="forgot_password_description">Nhập địa chỉ email của bạn và chúng tôi sẽ gửi link để đặt lại mật khẩu.</string>
+    <string name="forgot_password_description">Nhập địa chỉ email của bạn và chúng tôi sẽ gửi mã để đặt lại mật khẩu.</string>
     <string name="forgot_password_sent">Đã gửi link đặt lại! Kiểm tra hộp thư email của bạn.</string>
     <string name="error_passwords_do_not_match">Mật khẩu không khớp</string>
+    <string name="error_password_too_short">Mật khẩu phải có ít nhất 6 ký tự</string>
     <string name="label_your_name">Họ tên</string>
     <string name="action_close">Đóng</string>
     <string name="password_placeholder">Ít nhất 6 ký tự</string>
     <string name="confirm_password_placeholder">Nhập lại mật khẩu</string>
     <string name="forgot_password_heading">Đặt lại mật khẩu</string>
+    <string name="action_send_otp">Gửi mã</string>
+
+    <!-- OTP Verification -->
+    <string name="otp_verification_title">Xác thực email</string>
+    <string name="otp_verification_heading">Nhập mã xác thực</string>
+    <string name="otp_verification_description">Chúng tôi đã gửi mã 6 chữ số đến</string>
+    <string name="action_verify_otp">Xác thực</string>
+    <string name="action_resend_otp">Gửi lại mã</string>
+    <string name="otp_expired">Mã đã hết hạn</string>
+    <string name="otp_rate_limit_exceeded">Đã đạt giới hạn gửi trong ngày (5 lần). Thử lại vào ngày mai.</string>
+
+    <!-- Reset Password -->
+    <string name="reset_password_title">Mật khẩu mới</string>
+    <string name="reset_password_heading">Tạo mật khẩu mới</string>
+    <string name="reset_password_description">Mật khẩu mới phải có ít nhất 6 ký tự.</string>
+    <string name="label_new_password">Mật khẩu mới</string>
+    <string name="action_save_password">Lưu mật khẩu</string>
+    <string name="reset_password_success_title">Đã cập nhật mật khẩu!</string>
+    <string name="reset_password_success_message">Mật khẩu của bạn đã được thay đổi thành công. Vui lòng đăng nhập bằng mật khẩu mới.</string>
 
     <!-- Onboarding -->
     <string name="onboarding_select_language">Chọn ngôn ngữ của bạn</string>

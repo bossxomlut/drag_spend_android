@@ -27,14 +27,34 @@
     <string name="register_check_email_title">Check your email</string>
     <string name="register_check_email_body">We\'ve sent a confirmation link to your email. Please verify your account before logging in.</string>
     <string name="forgot_password_title">Forgot Password</string>
-    <string name="forgot_password_description">Enter your email address and we\'ll send you a link to reset your password.</string>
+    <string name="forgot_password_description">Enter your email address and we\'ll send you a code to reset your password.</string>
     <string name="forgot_password_sent">Reset link sent! Check your email inbox.</string>
     <string name="error_passwords_do_not_match">Passwords do not match</string>
+    <string name="error_password_too_short">Password must be at least 6 characters</string>
     <string name="label_your_name">Your name</string>
     <string name="action_close">Close</string>
     <string name="password_placeholder">At least 6 characters</string>
     <string name="confirm_password_placeholder">Re-enter password</string>
     <string name="forgot_password_heading">Reset your password</string>
+    <string name="action_send_otp">Send Code</string>
+
+    <!-- OTP Verification -->
+    <string name="otp_verification_title">Verify Email</string>
+    <string name="otp_verification_heading">Enter verification code</string>
+    <string name="otp_verification_description">We\'ve sent a 6-digit code to</string>
+    <string name="action_verify_otp">Verify</string>
+    <string name="action_resend_otp">Resend Code</string>
+    <string name="otp_expired">Code expired</string>
+    <string name="otp_rate_limit_exceeded">Daily limit reached (5 requests). Try again tomorrow.</string>
+
+    <!-- Reset Password -->
+    <string name="reset_password_title">New Password</string>
+    <string name="reset_password_heading">Create new password</string>
+    <string name="reset_password_description">Your new password must be at least 6 characters long.</string>
+    <string name="label_new_password">New Password</string>
+    <string name="action_save_password">Save Password</string>
+    <string name="reset_password_success_title">Password Updated!</string>
+    <string name="reset_password_success_message">Your password has been successfully changed. Please log in with your new password.</string>
 
     <!-- Onboarding -->
     <string name="onboarding_select_language">Choose your language</string>

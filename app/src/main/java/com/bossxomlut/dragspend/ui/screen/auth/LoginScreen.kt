@@ -69,6 +69,8 @@ import org.koin.androidx.compose.koinViewModel
 @Composable
 fun LoginScreen(
     onLoginSuccess: () -> Unit,
+    onLoginNeedsOnboarding: () -> Unit,
+    onNavigateToOTP: (email: String) -> Unit,
     onNavigateToRegister: () -> Unit,
     onNavigateToForgotPassword: () -> Unit,
     selectedLanguage: String,
@@ -80,7 +82,14 @@ fun LoginScreen(
 
     LaunchedEffect(uiState) {
         when (val state = uiState) {
-            is AuthUiState.Success -> onLoginSuccess()
+            is AuthUiState.LoginSuccess -> {
+                viewModel.resetState()
+                if (state.needsOnboarding) onLoginNeedsOnboarding() else onLoginSuccess()
+            }
+            is AuthUiState.EmailNotConfirmed -> {
+                viewModel.resetState()
+                onNavigateToOTP(state.email)
+            }
             is AuthUiState.Error -> {
                 toastMessage = state.message
                 viewModel.resetState()

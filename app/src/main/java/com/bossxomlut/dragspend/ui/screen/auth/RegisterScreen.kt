@@ -73,6 +73,7 @@ import org.koin.androidx.compose.koinViewModel
 @Composable
 fun RegisterScreen(
     onNavigateToLogin: () -> Unit,
+    onNavigateToOTP: (email: String) -> Unit,
     selectedLanguage: String,
     onLanguageSelected: (String) -> Unit,
     viewModel: AuthViewModel = koinViewModel(),
@@ -82,6 +83,10 @@ fun RegisterScreen(
 
     LaunchedEffect(uiState) {
         when (val state = uiState) {
+            is AuthUiState.EmailConfirmationPending -> {
+                viewModel.resetState()
+                onNavigateToOTP(state.email)
+            }
             is AuthUiState.Error -> {
                 toastMessage = state.message
                 viewModel.resetState()
@@ -142,41 +147,6 @@ private fun RegisterContent(
     var email by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
     var confirmPassword by remember { mutableStateOf("") }
-
-    if (uiState is AuthUiState.EmailConfirmationPending) {
-        Column(
-            modifier = modifier
-                .fillMaxSize()
-                .background(MaterialTheme.colorScheme.background)
-                .padding(24.dp),
-            verticalArrangement = Arrangement.Center,
-            horizontalAlignment = Alignment.CenterHorizontally,
-        ) {
-            Text(
-                text = stringResource(R.string.register_check_email_title),
-                style = MaterialTheme.typography.headlineSmall,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.onBackground,
-            )
-            Spacer(modifier = Modifier.height(12.dp))
-            Text(
-                text = stringResource(R.string.register_check_email_body),
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            Spacer(modifier = Modifier.height(24.dp))
-            Button(
-                onClick = onNavigateToLogin,
-                shape = RoundedCornerShape(12.dp),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(50.dp),
-            ) {
-                Text(stringResource(R.string.action_back_to_login))
-            }
-        }
-        return
-    }
 
     val isLoading = uiState is AuthUiState.Loading
     val isPasswordMismatch = confirmPassword.isNotEmpty() && confirmPassword != password

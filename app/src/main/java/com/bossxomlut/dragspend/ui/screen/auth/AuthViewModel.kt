@@ -6,6 +6,7 @@ import com.bossxomlut.dragspend.domain.repository.ProfileRepository
 import com.bossxomlut.dragspend.util.AppLog
 import com.bossxomlut.dragspend.util.toFriendlyMessage
 import io.github.jan.supabase.SupabaseClient
+import io.github.jan.supabase.auth.OtpType
 import io.github.jan.supabase.auth.auth
 import io.github.jan.supabase.auth.providers.builtin.Email
 import kotlinx.serialization.json.buildJsonObject
@@ -19,7 +20,15 @@ sealed interface AuthUiState {
     data object Idle : AuthUiState
     data object Loading : AuthUiState
     data object Success : AuthUiState
-    data object EmailConfirmationPending : AuthUiState
+    /** After registration: email and OTP sent to confirm account. */
+    data class EmailConfirmationPending(val email: String) : AuthUiState
+    /** After login attempt when email is not yet confirmed. */
+    data class EmailNotConfirmed(val email: String) : AuthUiState
+    /** Login successful — carries whether the user still needs onboarding. */
+    data class LoginSuccess(val needsOnboarding: Boolean) : AuthUiState
+    data object OTPSent : AuthUiState
+    data object OTPVerified : AuthUiState
+    data object PasswordResetSuccess : AuthUiState
     data class Error(val message: String) : AuthUiState
 }
 
@@ -43,10 +52,35 @@ class AuthViewModel(
                 }
             }.onSuccess {
                 AppLog.success(AppLog.Feature.AUTH, "login")
-                _uiState.value = AuthUiState.Success
+                val userId = supabase.auth.currentUserOrNull()?.id
+                if (userId == null) {
+                    _uiState.value = AuthUiState.LoginSuccess(needsOnboarding = false)
+                    return@onSuccess
+                }
+                val profile = profileRepository.getProfile(userId).getOrNull()
+                val needsOnboarding = profile?.language == null
+                AppLog.d(AppLog.Feature.AUTH, "login", "needsOnboarding=$needsOnboarding")
+                _uiState.value = AuthUiState.LoginSuccess(needsOnboarding = needsOnboarding)
             }.onFailure { e ->
                 AppLog.error(AppLog.Feature.AUTH, "login", e)
-                _uiState.value = AuthUiState.Error(e.toFriendlyMessage())
+                val raw = e.message?.lowercase() ?: ""
+                if (raw.contains("email not confirmed") || raw.contains("email_not_confirmed")) {
+                    // Email not yet confirmed — send a 6-digit OTP so the user can verify now
+                    runCatching {
+                        supabase.auth.signInWith(io.github.jan.supabase.auth.providers.builtin.OTP) {
+                            this.email = email
+                            createUser = false
+                        }
+                    }.onSuccess {
+                        AppLog.success(AppLog.Feature.AUTH, "login", "OTP sent for unconfirmed email")
+                        _uiState.value = AuthUiState.EmailNotConfirmed(email)
+                    }.onFailure { e2 ->
+                        AppLog.error(AppLog.Feature.AUTH, "login", e2)
+                        _uiState.value = AuthUiState.Error(e2.toFriendlyMessage())
+                    }
+                } else {
+                    _uiState.value = AuthUiState.Error(e.toFriendlyMessage())
+                }
             }
         }
     }
@@ -56,6 +90,7 @@ class AuthViewModel(
         viewModelScope.launch {
             _uiState.value = AuthUiState.Loading
             runCatching {
+                // Step 1: create the account
                 supabase.auth.signUpWith(Email) {
                     this.email = email
                     this.password = password
@@ -63,9 +98,16 @@ class AuthViewModel(
                         put("name", name.trim())
                     }
                 }
+                // Step 2: explicitly send a 6-digit OTP via sign-in OTP flow.
+                // signUpWith sends a link-based confirmation email by default;
+                // signInWith(OTP) always sends the 6-digit numeric code.
+                supabase.auth.signInWith(io.github.jan.supabase.auth.providers.builtin.OTP) {
+                    this.email = email
+                    createUser = false
+                }
             }.onSuccess {
-                AppLog.success(AppLog.Feature.AUTH, "register", "email confirmation pending")
-                _uiState.value = AuthUiState.EmailConfirmationPending
+                AppLog.success(AppLog.Feature.AUTH, "register", "OTP sent to $email")
+                _uiState.value = AuthUiState.EmailConfirmationPending(email)
             }.onFailure { e ->
                 AppLog.error(AppLog.Feature.AUTH, "register", e)
                 _uiState.value = AuthUiState.Error(e.toFriendlyMessage())
@@ -84,6 +126,77 @@ class AuthViewModel(
                 _uiState.value = AuthUiState.Success
             }.onFailure { e ->
                 AppLog.error(AppLog.Feature.AUTH, "sendPasswordResetEmail", e)
+                _uiState.value = AuthUiState.Error(e.toFriendlyMessage())
+            }
+        }
+    }
+
+    /**
+     * Send OTP to email for password reset flow.
+     * Uses signInWithOTP which sends a 6-digit code to the user's email.
+     */
+    fun sendOTP(email: String) {
+        AppLog.d(AppLog.Feature.AUTH, "sendOTP", "email=$email")
+        viewModelScope.launch {
+            _uiState.value = AuthUiState.Loading
+            runCatching {
+                supabase.auth.signInWith(io.github.jan.supabase.auth.providers.builtin.OTP) {
+                    this.email = email
+                    createUser = false
+                }
+            }.onSuccess {
+                AppLog.success(AppLog.Feature.AUTH, "sendOTP")
+                _uiState.value = AuthUiState.OTPSent
+            }.onFailure { e ->
+                AppLog.error(AppLog.Feature.AUTH, "sendOTP", e)
+                _uiState.value = AuthUiState.Error(e.toFriendlyMessage())
+            }
+        }
+    }
+
+    /**
+     * Verify OTP code entered by user.
+     * If successful, creates a session that allows password update.
+     */
+    fun verifyOTP(email: String, token: String) {
+        AppLog.d(AppLog.Feature.AUTH, "verifyOTP", "email=$email")
+        viewModelScope.launch {
+            _uiState.value = AuthUiState.Loading
+            runCatching {
+                supabase.auth.verifyEmailOtp(
+                    type = OtpType.Email.EMAIL,
+                    email = email,
+                    token = token,
+                )
+            }.onSuccess {
+                AppLog.success(AppLog.Feature.AUTH, "verifyOTP")
+                _uiState.value = AuthUiState.OTPVerified
+            }.onFailure { e ->
+                AppLog.error(AppLog.Feature.AUTH, "verifyOTP", e)
+                _uiState.value = AuthUiState.Error(e.toFriendlyMessage())
+            }
+        }
+    }
+
+    /**
+     * Update the user's password after OTP verification.
+     * Requires an active session from verifyOTP.
+     */
+    fun updatePassword(newPassword: String) {
+        AppLog.d(AppLog.Feature.AUTH, "updatePassword", "updating password")
+        viewModelScope.launch {
+            _uiState.value = AuthUiState.Loading
+            runCatching {
+                supabase.auth.updateUser {
+                    password = newPassword
+                }
+            }.onSuccess {
+                AppLog.success(AppLog.Feature.AUTH, "updatePassword")
+                // Sign out after password reset so user can login with new password
+                runCatching { supabase.auth.signOut() }
+                _uiState.value = AuthUiState.PasswordResetSuccess
+            }.onFailure { e ->
+                AppLog.error(AppLog.Feature.AUTH, "updatePassword", e)
                 _uiState.value = AuthUiState.Error(e.toFriendlyMessage())
             }
         }

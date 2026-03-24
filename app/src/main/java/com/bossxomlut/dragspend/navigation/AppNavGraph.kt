@@ -21,20 +21,17 @@ import com.bossxomlut.dragspend.data.model.Profile
 import com.bossxomlut.dragspend.ui.screen.account.AccountDeletedScreen
 import com.bossxomlut.dragspend.ui.screen.auth.ForgotPasswordScreen
 import com.bossxomlut.dragspend.ui.screen.auth.LoginScreen
+import com.bossxomlut.dragspend.ui.screen.auth.OTPVerificationScreen
 import com.bossxomlut.dragspend.ui.screen.auth.RegisterScreen
+import com.bossxomlut.dragspend.ui.screen.auth.ResetPasswordScreen
 import com.bossxomlut.dragspend.ui.screen.dashboard.DashboardScreen
-import com.bossxomlut.dragspend.ui.screen.dashboard.DashboardViewModel
-import com.bossxomlut.dragspend.ui.screen.dashboard.today.DayDetailScreen
-import com.bossxomlut.dragspend.ui.screen.dashboard.report.CategoryDetailScreen
 import com.bossxomlut.dragspend.ui.screen.onboarding.LanguageScreen
-import com.bossxomlut.dragspend.ui.screen.search.SearchScreen
 import com.bossxomlut.dragspend.ui.screen.settings.SettingsScreen
 import io.github.jan.supabase.SupabaseClient
 import io.github.jan.supabase.auth.auth
 import io.github.jan.supabase.auth.status.SessionStatus
 import io.github.jan.supabase.postgrest.from
 import kotlinx.coroutines.flow.first
-import org.koin.androidx.compose.koinViewModel
 
 enum class StartDestination {
     CHECKING,
@@ -48,8 +45,8 @@ enum class StartDestination {
 fun AppNavGraph(
     navController: NavHostController,
     supabase: SupabaseClient,
-    modifier: Modifier = Modifier,
     onReady: () -> Unit = {},
+    modifier: Modifier = Modifier,
 ) {
     var startDestination by remember { mutableStateOf(StartDestination.CHECKING) }
     var selectedLanguage by remember { mutableStateOf("en") }
@@ -62,14 +59,12 @@ fun AppNavGraph(
         val session = supabase.auth.currentSessionOrNull()
         if (session == null) {
             startDestination = StartDestination.LOGIN
-            onReady()
             return@LaunchedEffect
         }
 
         runCatching {
             val userId = session.user?.id ?: run {
                 startDestination = StartDestination.LOGIN
-                onReady()
                 return@LaunchedEffect
             }
             val profile = supabase.from("profiles")
@@ -82,9 +77,13 @@ fun AppNavGraph(
                 else -> StartDestination.DASHBOARD
             }
             selectedLanguage = profile?.language ?: "vi"
-            onReady()
         }.onFailure {
             startDestination = StartDestination.LOGIN
+        }
+    }
+
+    LaunchedEffect(startDestination) {
+        if (startDestination != StartDestination.CHECKING) {
             onReady()
         }
     }
@@ -128,6 +127,14 @@ fun AppNavGraph(
                         popUpTo(Route.Login.route) { inclusive = true }
                     }
                 },
+                onLoginNeedsOnboarding = {
+                    navController.navigate(Route.Onboarding.route) {
+                        popUpTo(Route.Login.route) { inclusive = true }
+                    }
+                },
+                onNavigateToOTP = { email ->
+                    navController.navigate(Route.OTPVerification.createRoute(email, "register"))
+                },
                 onNavigateToRegister = { navController.navigate(Route.Register.route) },
                 onNavigateToForgotPassword = { navController.navigate(Route.ForgotPassword.route) },
                 selectedLanguage = selectedLanguage,
@@ -138,6 +145,11 @@ fun AppNavGraph(
             composable(Route.Register.route) {
                 RegisterScreen(
                     onNavigateToLogin = { navController.popBackStack() },
+                    onNavigateToOTP = { email ->
+                        navController.navigate(Route.OTPVerification.createRoute(email, "register")) {
+                            popUpTo(Route.Register.route) { inclusive = true }
+                        }
+                    },
                     selectedLanguage = selectedLanguage,
                     onLanguageSelected = { selectedLanguage = it },
                 )
@@ -146,6 +158,47 @@ fun AppNavGraph(
             composable(Route.ForgotPassword.route) {
                 ForgotPasswordScreen(
                     onNavigateBack = { navController.popBackStack() },
+                    onNavigateToOTP = { email ->
+                        navController.navigate(Route.OTPVerification.createRoute(email, "forgot_password"))
+                    },
+                )
+            }
+
+            composable(
+                route = Route.OTPVerification.route,
+                arguments = listOf(
+                    navArgument("email") { type = NavType.StringType },
+                    navArgument("source") { type = NavType.StringType },
+                ),
+            ) { backStackEntry ->
+                val email = java.net.URLDecoder.decode(
+                    backStackEntry.arguments?.getString("email") ?: "",
+                    "UTF-8",
+                )
+                val source = backStackEntry.arguments?.getString("source") ?: "forgot_password"
+                OTPVerificationScreen(
+                    email = email,
+                    source = source,
+                    onNavigateBack = { navController.popBackStack() },
+                    onVerified = {
+                        if (source == "register") {
+                            navController.navigate(Route.Onboarding.route) {
+                                popUpTo(Route.Login.route) { inclusive = false }
+                            }
+                        } else {
+                            navController.navigate(Route.ResetPassword.route)
+                        }
+                    },
+                )
+            }
+
+            composable(Route.ResetPassword.route) {
+                ResetPasswordScreen(
+                    onNavigateToLogin = {
+                        navController.navigate(Route.Login.route) {
+                            popUpTo(0) { inclusive = true }
+                        }
+                    },
                 )
             }
 
@@ -169,57 +222,6 @@ fun AppNavGraph(
                     onNavigateToSettings = {
                         navController.navigate(Route.Settings.route)
                     },
-                    onNavigateToDayDetail = { date ->
-                        navController.navigate(Route.DayDetail.createRoute(date))
-                    },
-                    onNavigateToCategoryDetail = { yearMonth, categoryId, categoryName, categoryIcon ->
-                        navController.navigate(Route.CategoryDetail.createRoute(yearMonth, categoryId, categoryName, categoryIcon))
-                    },
-                    onNavigateToSearch = {
-                        navController.navigate(Route.Search.route)
-                    },
-                )
-            }
-
-            composable(
-                route = Route.DayDetail.route,
-                arguments = listOf(navArgument("date") { type = NavType.StringType }),
-            ) { backStackEntry ->
-                val date = backStackEntry.arguments?.getString("date") ?: return@composable
-                val dashboardEntry = remember(navController) {
-                    navController.getBackStackEntry(Route.Dashboard.route)
-                }
-                val dashVm: DashboardViewModel = koinViewModel(viewModelStoreOwner = dashboardEntry)
-                DayDetailScreen(
-                    date = date,
-                    dashboardViewModel = dashVm,
-                    onNavigateBack = { navController.popBackStack() },
-                )
-            }
-
-            composable(
-                route = Route.CategoryDetail.route,
-                arguments = listOf(
-                    navArgument("yearMonth") { type = NavType.StringType },
-                    navArgument("categoryId") { type = NavType.StringType },
-                    navArgument("categoryName") { type = NavType.StringType },
-                    navArgument("categoryIcon") { type = NavType.StringType },
-                ),
-            ) { backStackEntry ->
-                val yearMonth = backStackEntry.arguments?.getString("yearMonth") ?: return@composable
-                val categoryId = backStackEntry.arguments?.getString("categoryId") ?: return@composable
-                val categoryName = java.net.URLDecoder.decode(
-                    backStackEntry.arguments?.getString("categoryName") ?: "", "UTF-8"
-                )
-                val categoryIcon = java.net.URLDecoder.decode(
-                    backStackEntry.arguments?.getString("categoryIcon") ?: "📦", "UTF-8"
-                )
-                CategoryDetailScreen(
-                    yearMonth = yearMonth,
-                    categoryId = categoryId,
-                    categoryName = categoryName,
-                    categoryIcon = categoryIcon,
-                    onNavigateBack = { navController.popBackStack() },
                 )
             }
 
@@ -247,12 +249,6 @@ fun AppNavGraph(
                             popUpTo(0) { inclusive = true }
                         }
                     },
-                )
-            }
-
-            composable(Route.Search.route) {
-                SearchScreen(
-                    onNavigateBack = { navController.popBackStack() },
                 )
             }
         }
