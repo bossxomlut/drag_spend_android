@@ -38,6 +38,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
@@ -47,6 +48,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
@@ -77,12 +79,14 @@ fun CreateCardDialog(
     onDismiss: () -> Unit,
     onCreateCategory: (name: String, icon: String, color: String, type: TransactionType) -> Unit = { _, _, _, _ -> },
 ) {
+    val localContext = LocalContext.current
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,
     ) {
+        CompositionLocalProvider(LocalContext provides localContext) {
         CreateCardContent(
             userId = userId,
             language = language,
@@ -92,6 +96,7 @@ fun CreateCardDialog(
             onDismiss = onDismiss,
             onCreateCategory = onCreateCategory,
         )
+        }
     }
 }
 

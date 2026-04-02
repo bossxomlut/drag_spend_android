@@ -107,6 +107,7 @@ import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.material3.rememberStandardBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
@@ -122,6 +123,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.focus.onFocusEvent
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.layout.boundsInRoot
@@ -148,6 +150,7 @@ import com.bossxomlut.dragspend.ui.components.ToastType
 import com.bossxomlut.dragspend.ui.screen.dashboard.DashboardViewModel
 import com.bossxomlut.dragspend.ui.theme.DragSpendTheme
 import com.bossxomlut.dragspend.util.CurrencyFormatter
+import java.time.DayOfWeek
 import java.time.Instant
 import java.time.LocalDate
 import java.time.YearMonth
@@ -965,7 +968,12 @@ private fun MonthOverviewCalendar(
     val startOffset = (firstDayOfMonth.dayOfWeek.value - 1 + 7) % 7
     val daysInMonth = yearMonth.lengthOfMonth()
 
-    val dayLabels = listOf("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun")
+    val dayLabels = remember {
+        (0..6).map { offset ->
+            DayOfWeek.MONDAY.plus(offset.toLong())
+                .getDisplayName(TextStyle.SHORT, Locale.getDefault())
+        }
+    }
 
     Column(modifier = modifier) {
         // Day-of-week header
@@ -1133,6 +1141,7 @@ private fun MonthPickerBottomSheet(
     val current = YearMonth.parse(currentYearMonth)
     val today = YearMonth.now()
     var displayYear by remember { mutableStateOf(current.year) }
+    val localContext = LocalContext.current
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val monthFormatter = DateTimeFormatter.ofPattern("yyyy-MM")
 
@@ -1142,6 +1151,7 @@ private fun MonthPickerBottomSheet(
         containerColor = MaterialTheme.colorScheme.surface,
         shape = RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp),
     ) {
+        CompositionLocalProvider(LocalContext provides localContext) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
@@ -1240,6 +1250,7 @@ private fun MonthPickerBottomSheet(
                     }
                 }
             }
+        }
         }
     }
 }
