@@ -116,10 +116,22 @@ jobs:
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          COMMIT_MSG_RAW: ${{ steps.commit.outputs.message }}
+          COMMIT_TIME_RAW: ${{ steps.commit.outputs.time }}
         run: |
-          COMMIT_MSG=$(echo "${{ steps.commit.outputs.message }}" | sed 's/[_*[\]()~`>#+\-=|{}.!]/\\&/g')
-          COMMIT_TIME=$(echo "${{ steps.commit.outputs.time }}" | sed 's/[_*[\]()~`>#+\-=|{}.!]/\\&/g')
-          TEXT="✅ *Drag Spend* build \`${GITHUB_REF_NAME}\` deployed to Play Store successfully\!%0A%0A📝 *Commit:* ${COMMIT_MSG}%0A🕐 *Time:* ${COMMIT_TIME}%0A%0A🔗 [View run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})"
+          escape_md() {
+            printf '%s' "$1" | sed \
+              -e 's/\\/\\\\/g' -e 's/\./\\./g' -e 's/!/\\!/g' \
+              -e 's/_/\\_/g'   -e 's/\*/\\*/g' -e 's/-/\\-/g' \
+              -e 's/+/\\+/g'   -e 's/=/\\=/g' -e 's/|/\\|/g' \
+              -e 's/{/\\{/g'   -e 's/}/\\}/g' -e 's/#/\\#/g' \
+              -e 's/~/\\~/g'   -e 's/>/\\>/g' -e 's/(/\\(/g' \
+              -e 's/)/\\)/g'   -e 's/\[/\\[/g' -e 's/\]/\\]/g'
+          }
+          COMMIT_MSG=$(escape_md "$COMMIT_MSG_RAW")
+          COMMIT_TIME=$(escape_md "$COMMIT_TIME_RAW")
+          TAG=$(escape_md "${GITHUB_REF_NAME}")
+          TEXT="✅ *Drag Spend* build \`${TAG}\` deployed to Play Store successfully\!%0A%0A📝 *Commit:* ${COMMIT_MSG}%0A🕐 *Time:* ${COMMIT_TIME}%0A%0A🔗 [View run](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})"
           curl -s -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
             -d chat_id="${TELEGRAM_CHAT_ID}" \
             -d parse_mode="MarkdownV2" \
@@ -130,10 +142,22 @@ jobs:
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          COMMIT_MSG_RAW: ${{ steps.commit.outputs.message }}
+          COMMIT_TIME_RAW: ${{ steps.commit.outputs.time }}
         run: |
-          COMMIT_MSG=$(echo "${{ steps.commit.outputs.message }}" | sed 's/[_*[\]()~`>#+\-=|{}.!]/\\&/g')
-          COMMIT_TIME=$(echo "${{ steps.commit.outputs.time }}" | sed 's/[_*[\]()~`>#+\-=|{}.!]/\\&/g')
-          TEXT="❌ *Drag Spend* build \`${GITHUB_REF_NAME}\` FAILED\.%0A%0A📝 *Commit:* ${COMMIT_MSG}%0A🕐 *Time:* ${COMMIT_TIME}%0A%0A🔗 [View run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})"
+          escape_md() {
+            printf '%s' "$1" | sed \
+              -e 's/\\/\\\\/g' -e 's/\./\\./g' -e 's/!/\\!/g' \
+              -e 's/_/\\_/g'   -e 's/\*/\\*/g' -e 's/-/\\-/g' \
+              -e 's/+/\\+/g'   -e 's/=/\\=/g' -e 's/|/\\|/g' \
+              -e 's/{/\\{/g'   -e 's/}/\\}/g' -e 's/#/\\#/g' \
+              -e 's/~/\\~/g'   -e 's/>/\\>/g' -e 's/(/\\(/g' \
+              -e 's/)/\\)/g'   -e 's/\[/\\[/g' -e 's/\]/\\]/g'
+          }
+          COMMIT_MSG=$(escape_md "$COMMIT_MSG_RAW")
+          COMMIT_TIME=$(escape_md "$COMMIT_TIME_RAW")
+          TAG=$(escape_md "${GITHUB_REF_NAME}")
+          TEXT="❌ *Drag Spend* build \`${TAG}\` FAILED\.%0A%0A📝 *Commit:* ${COMMIT_MSG}%0A🕐 *Time:* ${COMMIT_TIME}%0A%0A🔗 [View run](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})"
           curl -s -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
             -d chat_id="${TELEGRAM_CHAT_ID}" \
             -d parse_mode="MarkdownV2" \
