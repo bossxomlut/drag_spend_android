@@ -25,9 +25,13 @@ import com.bossxomlut.dragspend.ui.screen.auth.OTPVerificationScreen
 import com.bossxomlut.dragspend.ui.screen.auth.RegisterScreen
 import com.bossxomlut.dragspend.ui.screen.auth.ResetPasswordScreen
 import com.bossxomlut.dragspend.ui.screen.dashboard.DashboardScreen
+import com.bossxomlut.dragspend.ui.screen.dashboard.DashboardViewModel
+import com.bossxomlut.dragspend.ui.screen.dashboard.report.CategoryDetailScreen
+import com.bossxomlut.dragspend.ui.screen.dashboard.today.DayDetailScreen
 import com.bossxomlut.dragspend.ui.screen.onboarding.LanguageScreen
 import com.bossxomlut.dragspend.ui.screen.search.SearchScreen
 import com.bossxomlut.dragspend.ui.screen.settings.SettingsScreen
+import org.koin.androidx.compose.koinViewModel
 import io.github.jan.supabase.SupabaseClient
 import io.github.jan.supabase.auth.auth
 import io.github.jan.supabase.auth.status.SessionStatus
@@ -226,6 +230,14 @@ fun AppNavGraph(
                     onNavigateToSearch = {
                         navController.navigate(Route.Search.route)
                     },
+                    onNavigateToDayDetail = { date ->
+                        navController.navigate(Route.DayDetail.createRoute(date))
+                    },
+                    onNavigateToCategoryDetail = { yearMonth, categoryId, categoryName, categoryIcon ->
+                        navController.navigate(
+                            Route.CategoryDetail.createRoute(yearMonth, categoryId, categoryName, categoryIcon),
+                        )
+                    },
                 )
             }
 
@@ -259,6 +271,52 @@ fun AppNavGraph(
                             popUpTo(0) { inclusive = true }
                         }
                     },
+                )
+            }
+
+            composable(
+                route = Route.DayDetail.route,
+                arguments = listOf(
+                    navArgument("date") { type = NavType.StringType },
+                ),
+            ) { backStackEntry ->
+                val date = backStackEntry.arguments?.getString("date") ?: return@composable
+                val dashboardEntry = remember(backStackEntry) {
+                    navController.getBackStackEntry(Route.Dashboard.route)
+                }
+                val dashboardViewModel: DashboardViewModel = koinViewModel(viewModelStoreOwner = dashboardEntry)
+                DayDetailScreen(
+                    date = date,
+                    dashboardViewModel = dashboardViewModel,
+                    onNavigateBack = { navController.popBackStack() },
+                )
+            }
+
+            composable(
+                route = Route.CategoryDetail.route,
+                arguments = listOf(
+                    navArgument("yearMonth") { type = NavType.StringType },
+                    navArgument("categoryId") { type = NavType.StringType },
+                    navArgument("categoryName") { type = NavType.StringType },
+                    navArgument("categoryIcon") { type = NavType.StringType },
+                ),
+            ) { backStackEntry ->
+                val yearMonth = backStackEntry.arguments?.getString("yearMonth") ?: return@composable
+                val categoryId = backStackEntry.arguments?.getString("categoryId") ?: return@composable
+                val categoryName = java.net.URLDecoder.decode(
+                    backStackEntry.arguments?.getString("categoryName") ?: "",
+                    "UTF-8",
+                )
+                val categoryIcon = java.net.URLDecoder.decode(
+                    backStackEntry.arguments?.getString("categoryIcon") ?: "",
+                    "UTF-8",
+                )
+                CategoryDetailScreen(
+                    yearMonth = yearMonth,
+                    categoryId = categoryId,
+                    categoryName = categoryName,
+                    categoryIcon = categoryIcon,
+                    onNavigateBack = { navController.popBackStack() },
                 )
             }
         }
