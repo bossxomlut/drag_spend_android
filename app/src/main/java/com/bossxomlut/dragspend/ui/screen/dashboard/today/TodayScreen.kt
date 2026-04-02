@@ -65,6 +65,7 @@ import androidx.compose.material.icons.automirrored.filled.TrendingDown
 import androidx.compose.material.icons.filled.AccountCircle
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.CalendarToday
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
@@ -119,6 +120,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.focus.onFocusEvent
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.layout.onGloballyPositioned
@@ -244,6 +246,7 @@ fun TodayScreen(
         },
     ) {
         val scope = rememberCoroutineScope()
+        val keyboardController = LocalSoftwareKeyboardController.current
         val bottomSheetScaffoldState = rememberBottomSheetScaffoldState(
             bottomSheetState = rememberStandardBottomSheetState(
                 initialValue = SheetValue.PartiallyExpanded,
@@ -251,10 +254,31 @@ fun TodayScreen(
             ),
         )
 
+        LaunchedEffect(bottomSheetScaffoldState.bottomSheetState.currentValue) {
+            if (bottomSheetScaffoldState.bottomSheetState.currentValue == SheetValue.PartiallyExpanded) {
+                keyboardController?.hide()
+            }
+        }
+
         BottomSheetScaffold(
             modifier = Modifier.fillMaxSize(),
             scaffoldState = bottomSheetScaffoldState,
-            sheetPeekHeight = 80.dp,
+            sheetPeekHeight = 60.dp,
+            sheetDragHandle = {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 6.dp),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(width = 32.dp, height = 4.dp)
+                            .clip(CircleShape)
+                            .background(MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f)),
+                    )
+                }
+            },
             sheetContainerColor = MaterialTheme.colorScheme.surface,
             sheetTonalElevation = 2.dp,
             sheetShadowElevation = 4.dp,
@@ -1270,6 +1294,21 @@ private fun SpendingCardsPanel(
                         style = MaterialTheme.typography.bodySmall,
                     )
                 },
+                trailingIcon = {
+                    if (searchQuery.isNotEmpty()) {
+                        IconButton(
+                            onClick = { onSearchChange("") },
+                            modifier = Modifier.size(32.dp),
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Close,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.size(16.dp),
+                            )
+                        }
+                    }
+                },
                 singleLine = true,
                 shape = RoundedCornerShape(12.dp),
                 textStyle = MaterialTheme.typography.bodySmall,
@@ -1389,7 +1428,7 @@ private fun SpendingCardsPanel(
         Box(modifier = modifier.onGloballyPositioned { layoutCoordinates = it }) {
             Card(
                 modifier = Modifier
-                    .width(150.dp)
+                    .width(130.dp)
                     .pointerInput(card.id) {
                         awaitEachGesture {
                             val down = awaitFirstDown(requireUnconsumed = false)
@@ -1455,17 +1494,17 @@ private fun SpendingCardsPanel(
                     color = accentColor.copy(alpha = 0.3f),
                 ),
             ) {
-                Column(modifier = Modifier.padding(10.dp)) {
+                Column(modifier = Modifier.padding(8.dp)) {
                     // Icon + menu
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         card.category?.let { cat ->
-                            CategoryIcon(icon = cat.icon, color = cat.color, size = 28.dp)
+                            CategoryIcon(icon = cat.icon, color = cat.color, size = 24.dp)
                         } ?: run {
                             val emoji = if (card.type == TransactionType.EXPENSE) "💸" else "💰"
-                            CategoryIcon(icon = emoji, color = "#9E9E9E", size = 28.dp)
+                            CategoryIcon(icon = emoji, color = "#9E9E9E", size = 24.dp)
                         }
                         Spacer(modifier = Modifier.weight(1f))
                         Box {
@@ -1570,7 +1609,7 @@ private fun SpendingCardsPanel(
                         onClick = { onAdd(selectedAmount) },
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(30.dp),
+                            .height(26.dp),
                         shape = RoundedCornerShape(8.dp),
                         contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
                         colors = ButtonDefaults.buttonColors(
