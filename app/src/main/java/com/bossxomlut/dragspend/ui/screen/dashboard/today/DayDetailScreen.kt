@@ -69,10 +69,10 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.bossxomlut.dragspend.R
-import com.bossxomlut.dragspend.data.model.Category
-import com.bossxomlut.dragspend.data.model.SpendingCard
-import com.bossxomlut.dragspend.data.model.Transaction
-import com.bossxomlut.dragspend.data.model.TransactionType
+import com.bossxomlut.dragspend.domain.model.Category
+import com.bossxomlut.dragspend.domain.model.SpendingCard
+import com.bossxomlut.dragspend.domain.model.Transaction
+import com.bossxomlut.dragspend.domain.model.TransactionType
 import com.bossxomlut.dragspend.domain.repository.CreateTransactionRequest
 import com.bossxomlut.dragspend.ui.components.AppToast
 import com.bossxomlut.dragspend.ui.components.CategoryIcon

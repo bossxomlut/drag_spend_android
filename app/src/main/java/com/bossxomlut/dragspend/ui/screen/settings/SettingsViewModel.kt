@@ -3,15 +3,16 @@ package com.bossxomlut.dragspend.ui.screen.settings
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
-import com.bossxomlut.dragspend.data.model.Profile
-import com.bossxomlut.dragspend.domain.repository.ProfileRepository
+import com.bossxomlut.dragspend.domain.repository.SessionRepository
+import com.bossxomlut.dragspend.domain.usecase.profile.DeleteAccountUseCase
+import com.bossxomlut.dragspend.domain.usecase.profile.GetProfileUseCase
+import com.bossxomlut.dragspend.domain.usecase.profile.UpdateProfileLanguageUseCase
+import com.bossxomlut.dragspend.domain.usecase.profile.UpdateProfileNameUseCase
 import com.bossxomlut.dragspend.util.AppLog
 import com.bossxomlut.dragspend.util.AppPreferences
 import com.bossxomlut.dragspend.util.ReminderScheduler
 import com.bossxomlut.dragspend.util.ThemeMode
 import com.bossxomlut.dragspend.util.toFriendlyMessage
-import io.github.jan.supabase.SupabaseClient
-import io.github.jan.supabase.auth.auth
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -32,8 +33,11 @@ data class SettingsUiState(
 
 class SettingsViewModel(
     application: Application,
-    private val supabase: SupabaseClient,
-    private val profileRepository: ProfileRepository,
+    private val sessionRepository: SessionRepository,
+    private val getProfileUseCase: GetProfileUseCase,
+    private val updateProfileNameUseCase: UpdateProfileNameUseCase,
+    private val updateProfileLanguageUseCase: UpdateProfileLanguageUseCase,
+    private val deleteAccountUseCase: DeleteAccountUseCase,
     private val appPreferences: AppPreferences,
 ) : AndroidViewModel(application) {
 
@@ -57,11 +61,10 @@ class SettingsViewModel(
     }
 
     private fun loadProfile() {
-        val user = supabase.auth.currentUserOrNull() ?: return
-        AppLog.d(AppLog.Feature.SETTINGS, "loadProfile", "userId=${user.id.take(8)}")
-        _uiState.update { it.copy(email = user.email ?: "", isLoading = true) }
+        AppLog.d(AppLog.Feature.SETTINGS, "loadProfile")
+        _uiState.update { it.copy(email = sessionRepository.getCurrentUserEmail() ?: "", isLoading = true) }
         viewModelScope.launch {
-            profileRepository.getProfile(user.id)
+            getProfileUseCase()
                 .onSuccess { profile ->
                     _uiState.update {
                         it.copy(
@@ -78,21 +81,19 @@ class SettingsViewModel(
     }
 
     fun updateName(name: String) {
-        val userId = supabase.auth.currentUserOrNull()?.id ?: return
         AppLog.d(AppLog.Feature.SETTINGS, "updateName", "name=$name")
         viewModelScope.launch {
-            profileRepository.updateName(userId, name.trim())
+            updateProfileNameUseCase(name.trim())
                 .onSuccess { _uiState.update { it.copy(displayName = name.trim()) } }
                 .onFailure { e -> _uiState.update { it.copy(error = e.toFriendlyMessage()) } }
         }
     }
 
     fun setLanguage(language: String) {
-        val userId = supabase.auth.currentUserOrNull()?.id ?: return
         AppLog.d(AppLog.Feature.SETTINGS, "setLanguage", "language=$language")
         _uiState.update { it.copy(language = language) }
         viewModelScope.launch {
-            profileRepository.updateLanguage(userId, language)
+            updateProfileLanguageUseCase(language)
                 .onFailure { e -> _uiState.update { it.copy(error = e.toFriendlyMessage()) } }
         }
     }
@@ -125,7 +126,7 @@ class SettingsViewModel(
     fun signOut() {
         AppLog.d(AppLog.Feature.AUTH, "signOut")
         viewModelScope.launch {
-            runCatching { supabase.auth.signOut() }
+            sessionRepository.signOut()
                 .onSuccess {
                     AppLog.success(AppLog.Feature.AUTH, "signOut")
                     _uiState.update { it.copy(signedOut = true) }
@@ -138,12 +139,11 @@ class SettingsViewModel(
     }
 
     fun deleteAccount() {
-        val userId = supabase.auth.currentUserOrNull()?.id ?: return
-        AppLog.d(AppLog.Feature.SETTINGS, "deleteAccount", "userId=${userId.take(8)}")
+        AppLog.d(AppLog.Feature.SETTINGS, "deleteAccount")
         viewModelScope.launch {
-            profileRepository.softDeleteAccount(userId)
+            deleteAccountUseCase()
                 .onSuccess {
-                    runCatching { supabase.auth.signOut() }
+                    sessionRepository.signOut()
                     _uiState.update { it.copy(accountDeleted = true) }
                 }
                 .onFailure { e -> _uiState.update { it.copy(error = e.toFriendlyMessage()) } }

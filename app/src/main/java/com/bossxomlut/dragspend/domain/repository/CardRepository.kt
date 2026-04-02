@@ -1,8 +1,7 @@
 package com.bossxomlut.dragspend.domain.repository
 
-import com.bossxomlut.dragspend.data.model.CardVariant
-import com.bossxomlut.dragspend.data.model.SpendingCard
-import com.bossxomlut.dragspend.data.model.TransactionType
+import com.bossxomlut.dragspend.domain.model.SpendingCard
+import com.bossxomlut.dragspend.domain.model.TransactionType
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put

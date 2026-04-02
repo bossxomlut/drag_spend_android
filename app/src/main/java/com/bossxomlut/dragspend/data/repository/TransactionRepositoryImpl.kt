@@ -1,7 +1,11 @@
 package com.bossxomlut.dragspend.data.repository
 
-import com.bossxomlut.dragspend.data.model.MonthlyReportRow
-import com.bossxomlut.dragspend.data.model.Transaction
+import com.bossxomlut.dragspend.data.model.MonthlyReportRowDto
+import com.bossxomlut.dragspend.data.model.TransactionDto
+import com.bossxomlut.dragspend.data.model.toDomain
+import com.bossxomlut.dragspend.domain.error.mapToAppError
+import com.bossxomlut.dragspend.domain.model.ReportEntry
+import com.bossxomlut.dragspend.domain.model.Transaction
 import com.bossxomlut.dragspend.domain.repository.CategoryRepository
 import com.bossxomlut.dragspend.domain.repository.CreateTransactionRequest
 import com.bossxomlut.dragspend.domain.repository.TransactionRepository
@@ -33,9 +37,10 @@ class TransactionRepositoryImpl(
                 }
                 order("position", order = Order.ASCENDING)
             }
-            .decodeList<Transaction>()
+            .decodeList<TransactionDto>()
         attachCategories(txns)
     }.logResult(AppLog.Feature.TRANSACTION, "getTransactions") { "${it.size} items" }
+        .mapToAppError()
 
     override suspend fun getMonthlyTransactions(userId: String, yearMonth: String): Result<List<Transaction>> = runCatching {
         AppLog.d(AppLog.Feature.TRANSACTION, "getMonthlyTransactions", "userId=${userId.take(8)}, yearMonth=$yearMonth")
@@ -58,14 +63,18 @@ class TransactionRepositoryImpl(
                 order("date", order = Order.ASCENDING)
                 order("position", order = Order.ASCENDING)
             }
-            .decodeList<Transaction>()
+            .decodeList<TransactionDto>()
+            .map { it.toDomain() }
     }.logResult(AppLog.Feature.TRANSACTION, "getMonthlyTransactions") { "${it.size} items" }
+        .mapToAppError()
 
-    override suspend fun getMonthlyReport(userId: String, yearMonth: String): Result<List<MonthlyReportRow>> = runCatching {
+    override suspend fun getMonthlyReport(userId: String, yearMonth: String): Result<List<ReportEntry>> = runCatching {
         AppLog.d(AppLog.Feature.TRANSACTION, "getMonthlyReport", "userId=${userId.take(8)}, yearMonth=$yearMonth")
         val params = buildJsonObject { put("p_year_month", yearMonth) }
-        supabase.postgrest.rpc("get_monthly_report", params).decodeList<MonthlyReportRow>()
+        supabase.postgrest.rpc("get_monthly_report", params).decodeList<MonthlyReportRowDto>()
+            .map { it.toDomain() }
     }.logResult(AppLog.Feature.TRANSACTION, "getMonthlyReport") { "${it.size} rows" }
+        .mapToAppError()
 
     override suspend fun createTransaction(request: CreateTransactionRequest): Result<Transaction> = runCatching {
         AppLog.d(AppLog.Feature.TRANSACTION, "createTransaction", "date=${request.date}, title=${request.title}, amount=${request.amount}, type=${request.type}")
@@ -78,14 +87,16 @@ class TransactionRepositoryImpl(
                 order("position", order = Order.DESCENDING)
                 limit(count = 1)
             }
-            .decodeList<Transaction>()
+            .decodeList<TransactionDto>()
             .firstOrNull()?.position ?: -1
 
         val row = request.toJsonObject(maxPosition + 1)
         supabase.from("transactions")
             .insert(row) { select() }
-            .decodeSingle<Transaction>()
+            .decodeSingle<TransactionDto>()
+            .toDomain()
     }.logResult(AppLog.Feature.TRANSACTION, "createTransaction") { "id=${it.id}" }
+        .mapToAppError()
 
     override suspend fun updateTransaction(
         transactionId: String,
@@ -93,14 +104,15 @@ class TransactionRepositoryImpl(
     ): Result<Transaction> = runCatching {
         AppLog.d(AppLog.Feature.TRANSACTION, "updateTransaction", "id=$transactionId, amount=${request.amount}, type=${request.type}")
         val row = request.toJsonObject()
-        val updated = supabase.from("transactions")
+        val updatedDto = supabase.from("transactions")
             .update(row) {
                 filter { eq("id", transactionId) }
                 select()
             }
-            .decodeSingle<Transaction>()
-        attachCategories(listOf(updated)).first()
+            .decodeSingle<TransactionDto>()
+        attachCategories(listOf(updatedDto)).first()
     }.logResult(AppLog.Feature.TRANSACTION, "updateTransaction") { "id=${it.id}" }
+        .mapToAppError()
 
     override suspend fun deleteTransaction(transactionId: String): Result<Unit> = runCatching {
         AppLog.d(AppLog.Feature.TRANSACTION, "deleteTransaction", "id=$transactionId")
@@ -108,6 +120,7 @@ class TransactionRepositoryImpl(
             .delete { filter { eq("id", transactionId) } }
         Unit
     }.logResult(AppLog.Feature.TRANSACTION, "deleteTransaction") { "deleted" }
+        .mapToAppError()
 
     override suspend fun copyFromYesterday(
         userId: String,
@@ -123,7 +136,7 @@ class TransactionRepositoryImpl(
                 }
                 order("position", order = Order.ASCENDING)
             }
-            .decodeList<Transaction>()
+            .decodeList<TransactionDto>()
 
         if (yesterday.isEmpty()) return@runCatching emptyList()
 
@@ -136,7 +149,7 @@ class TransactionRepositoryImpl(
                 order("position", order = Order.DESCENDING)
                 limit(count = 1)
             }
-            .decodeList<Transaction>()
+            .decodeList<TransactionDto>()
             .firstOrNull()?.position ?: -1
 
         val newRows = yesterday.mapIndexed { index, t ->
@@ -147,15 +160,16 @@ class TransactionRepositoryImpl(
                 title = t.title,
                 amount = t.amount,
                 categoryId = t.categoryId,
-                type = t.type,
+                type = t.type.toDomain(),
                 note = t.note,
             ).toJsonObject(maxPosition + 1 + index)
         }
         supabase.from("transactions")
             .insert(newRows) { select() }
-            .decodeList<Transaction>()
+            .decodeList<TransactionDto>()
             .let { attachCategories(it) }
     }.logResult(AppLog.Feature.TRANSACTION, "copyFromYesterday") { "${it.size} copied" }
+        .mapToAppError()
 
     override suspend fun searchTransactions(
         userId: String,
@@ -170,8 +184,6 @@ class TransactionRepositoryImpl(
             "userId=${userId.take(8)}, query=$query, categories=$categoryIds, start=$startDate, end=$endDate",
         )
 
-        // Both dates should always be provided by SearchViewModel (with 3-month default fallback).
-        // Convert endDate to exclusive (endDate + 1 day) for lt() operator.
         val dateFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd")
         val start = startDate ?: LocalDate.now().minusMonths(3).format(dateFormatter)
         val exclusiveEnd = endDate?.let {
@@ -194,7 +206,7 @@ class TransactionRepositoryImpl(
                 order("date", order = Order.DESCENDING)
                 order("position", order = Order.ASCENDING)
             }
-            .decodeList<Transaction>()
+            .decodeList<TransactionDto>()
 
         AppLog.d(
             AppLog.Feature.TRANSACTION,
@@ -204,23 +216,18 @@ class TransactionRepositoryImpl(
 
         val withCategories = attachCategories(txns)
 
-        // Client-side filtering (full-text search, category, AND dates)
-        // Full-text: split query into words, search in title + note + category name
-        // All words must match somewhere (AND logic)
         val searchWords = query.lowercase().split(Regex("\\s+")).filter { it.isNotBlank() }
 
         withCategories.filter { tx ->
             val matchesQuery = if (searchWords.isEmpty()) {
                 true
             } else {
-                // Combine all searchable text fields
                 val searchableText = buildString {
                     append(tx.title.lowercase())
                     append(" ")
                     tx.note?.let { append(it.lowercase()); append(" ") }
                     tx.category?.name?.let { append(it.lowercase()) }
                 }
-                // All words must be found in the combined text
                 searchWords.all { word -> searchableText.contains(word) }
             }
             val matchesCategory = categoryIds.isEmpty() || tx.categoryId in categoryIds
@@ -228,21 +235,17 @@ class TransactionRepositoryImpl(
             matchesQuery && matchesCategory && matchesDateRange
         }
     }.logResult(AppLog.Feature.TRANSACTION, "searchTransactions") { "${it.size} items" }
+        .mapToAppError()
 
-    /**
-     * Attaches the cached Category object to each transaction that has a category_id.
-     * Uses CategoryRepository so the look-up is served from the in-memory cache on subsequent calls.
-     */
-    private suspend fun attachCategories(transactions: List<Transaction>): List<Transaction> {
-        if (transactions.isEmpty()) return transactions
-        val categoryIds = transactions.mapNotNull { it.categoryId }.distinct()
-        if (categoryIds.isEmpty()) return transactions
-        // All transactions belong to the same user — use the first one to get the userId.
-        val userId = transactions.first().userId
+    private suspend fun attachCategories(transactionDtos: List<TransactionDto>): List<Transaction> {
+        if (transactionDtos.isEmpty()) return emptyList()
+        val catIds = transactionDtos.mapNotNull { it.categoryId }.distinct()
+        if (catIds.isEmpty()) return transactionDtos.map { it.toDomain() }
+        val userId = transactionDtos.first().userId
         val allCategories = categoryRepository.getCategories(userId).getOrElse { emptyList() }
         val categoryById = allCategories.associateBy { it.id }
-        return transactions.map { tx ->
-            tx.copy(category = tx.categoryId?.let { categoryById[it] })
+        return transactionDtos.map { dto ->
+            dto.toDomain(category = dto.categoryId?.let { categoryById[it] })
         }
     }
 }

@@ -1,8 +1,11 @@
 package com.bossxomlut.dragspend.data.repository
 
-import com.bossxomlut.dragspend.data.model.CardVariant
-import com.bossxomlut.dragspend.data.model.Category
-import com.bossxomlut.dragspend.data.model.SpendingCard
+import com.bossxomlut.dragspend.data.model.CardVariantDto
+import com.bossxomlut.dragspend.data.model.CategoryDto
+import com.bossxomlut.dragspend.data.model.SpendingCardDto
+import com.bossxomlut.dragspend.data.model.toDomain
+import com.bossxomlut.dragspend.domain.error.mapToAppError
+import com.bossxomlut.dragspend.domain.model.SpendingCard
 import com.bossxomlut.dragspend.domain.repository.CardRepository
 import com.bossxomlut.dragspend.domain.repository.CreateCardRequest
 import com.bossxomlut.dragspend.util.AppLog
@@ -21,85 +24,92 @@ class CardRepositoryImpl(
 
     override suspend fun getCards(userId: String): Result<List<SpendingCard>> = runCatching {
         AppLog.d(AppLog.Feature.CARD, "getCards", "userId=${userId.take(8)}")
-        val cards = supabase.from("spending_cards")
+        val cardDtos = supabase.from("spending_cards")
             .select {
                 filter { eq("user_id", userId) }
                 order("use_count", order = Order.DESCENDING)
                 order("position", order = Order.ASCENDING)
             }
-            .decodeList<SpendingCard>()
+            .decodeList<SpendingCardDto>()
 
-        val cardIds = cards.map { it.id }
-        val variants = if (cardIds.isNotEmpty()) {
+        val cardIds = cardDtos.map { it.id }
+        val variantDtos = if (cardIds.isNotEmpty()) {
             supabase.from("card_variants")
                 .select {
                     filter { isIn("card_id", cardIds) }
                     order("position", order = Order.ASCENDING)
                 }
-                .decodeList<CardVariant>()
+                .decodeList<CardVariantDto>()
         } else {
             emptyList()
         }
 
-        val variantsByCard = variants.groupBy { it.cardId }
+        val variantsByCard = variantDtos.groupBy { it.cardId }
 
-        val categoryIds = cards.mapNotNull { it.categoryId }.distinct()
+        val categoryIds = cardDtos.mapNotNull { it.categoryId }.distinct()
         val categories = if (categoryIds.isNotEmpty()) {
             supabase.from("categories")
                 .select { filter { isIn("id", categoryIds) } }
-                .decodeList<Category>()
+                .decodeList<CategoryDto>()
+                .map { it.toDomain() }
         } else {
             emptyList()
         }
         val categoryById = categories.associateBy { it.id }
 
-        cards.map { card ->
-            card.copy(
-                variants = variantsByCard[card.id] ?: emptyList(),
-                category = card.categoryId?.let { categoryById[it] },
+        cardDtos.map { cardDto ->
+            val domainVariants = (variantsByCard[cardDto.id] ?: emptyList()).map { it.toDomain() }
+            cardDto.toDomain(
+                category = cardDto.categoryId?.let { categoryById[it] },
+                variants = domainVariants,
             )
         }
     }.logResult(AppLog.Feature.CARD, "getCards") { "${it.size} cards" }
+        .mapToAppError()
 
     override suspend fun createCard(request: CreateCardRequest): Result<SpendingCard> = runCatching {
         AppLog.d(AppLog.Feature.CARD, "createCard", "title=${request.title}, type=${request.type}")
-        val card = supabase.from("spending_cards")
+        val cardDto = supabase.from("spending_cards")
             .insert(request.toJsonObject()) { select() }
-            .decodeSingle<SpendingCard>()
+            .decodeSingle<SpendingCardDto>()
 
-        if (request.variants.isNotEmpty()) {
-            val variantRows = request.variants.mapIndexed { index, v -> v.toJsonObject(card.id, index) }
-            val savedVariants = supabase.from("card_variants")
+        val savedVariants = if (request.variants.isNotEmpty()) {
+            val variantRows = request.variants.mapIndexed { index, v -> v.toJsonObject(cardDto.id, index) }
+            supabase.from("card_variants")
                 .insert(variantRows) { select() }
-                .decodeList<CardVariant>()
-            card.copy(variants = savedVariants)
+                .decodeList<CardVariantDto>()
+                .map { it.toDomain() }
         } else {
-            card
+            emptyList()
         }
+        cardDto.toDomain(category = null, variants = savedVariants)
     }.logResult(AppLog.Feature.CARD, "createCard") { "id=${it.id}" }
+        .mapToAppError()
 
     override suspend fun updateCard(cardId: String, request: CreateCardRequest): Result<SpendingCard> = runCatching {
         AppLog.d(AppLog.Feature.CARD, "updateCard", "id=$cardId, title=${request.title}")
-        val card = supabase.from("spending_cards")
+        val cardDto = supabase.from("spending_cards")
             .update(request.toJsonObject()) {
                 filter { eq("id", cardId) }
                 select()
             }
-            .decodeSingle<SpendingCard>()
+            .decodeSingle<SpendingCardDto>()
 
         supabase.from("card_variants")
             .delete { filter { eq("card_id", cardId) } }
 
         val savedVariants = if (request.variants.isNotEmpty()) {
-            val variantRows = request.variants.mapIndexed { index, v -> v.toJsonObject(card.id, index) }
+            val variantRows = request.variants.mapIndexed { index, v -> v.toJsonObject(cardDto.id, index) }
             supabase.from("card_variants")
                 .insert(variantRows) { select() }
-                .decodeList<CardVariant>()
+                .decodeList<CardVariantDto>()
+                .map { it.toDomain() }
         } else {
             emptyList()
         }
-        card.copy(variants = savedVariants)
+        cardDto.toDomain(category = null, variants = savedVariants)
     }.logResult(AppLog.Feature.CARD, "updateCard") { "id=${it.id}" }
+        .mapToAppError()
 
     override suspend fun deleteCard(cardId: String): Result<Unit> = runCatching {
         AppLog.d(AppLog.Feature.CARD, "deleteCard", "id=$cardId")
@@ -107,6 +117,7 @@ class CardRepositoryImpl(
             .delete { filter { eq("id", cardId) } }
         Unit
     }.logResult(AppLog.Feature.CARD, "deleteCard") { "deleted" }
+        .mapToAppError()
 
     override suspend fun incrementUseCount(cardId: String): Result<Unit> = runCatching {
         AppLog.d(AppLog.Feature.CARD, "incrementUseCount", "id=$cardId")
@@ -114,4 +125,5 @@ class CardRepositoryImpl(
         supabase.postgrest.rpc("increment_card_use_count", params)
         Unit
     }.logResult(AppLog.Feature.CARD, "incrementUseCount") { "ok" }
+        .mapToAppError()
 }

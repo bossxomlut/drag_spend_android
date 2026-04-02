@@ -2,11 +2,9 @@ package com.bossxomlut.dragspend.ui.screen.dashboard.report
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.bossxomlut.dragspend.data.model.Transaction
-import com.bossxomlut.dragspend.domain.repository.TransactionRepository
+import com.bossxomlut.dragspend.domain.model.Transaction
+import com.bossxomlut.dragspend.domain.usecase.transaction.GetMonthlyTransactionsUseCase
 import com.bossxomlut.dragspend.util.toFriendlyMessage
-import io.github.jan.supabase.SupabaseClient
-import io.github.jan.supabase.auth.auth
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -20,24 +18,16 @@ data class CategoryDetailUiState(
 )
 
 class CategoryDetailViewModel(
-    private val supabase: SupabaseClient,
-    private val transactionRepository: TransactionRepository,
+    private val getMonthlyTransactionsUseCase: GetMonthlyTransactionsUseCase,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(CategoryDetailUiState())
     val uiState: StateFlow<CategoryDetailUiState> = _uiState.asStateFlow()
 
-    private val currentUserId get() = supabase.auth.currentUserOrNull()?.id
-
-    /**
-     * Loads all transactions for [yearMonth] and filters them by [categoryId].
-     * Pass [categoryId] = "other" to see uncategorised transactions.
-     */
     fun load(yearMonth: String, categoryId: String) {
-        val userId = currentUserId ?: return
         _uiState.update { it.copy(isLoading = true) }
         viewModelScope.launch {
-            transactionRepository.getMonthlyTransactions(userId, yearMonth)
+            getMonthlyTransactionsUseCase(yearMonth)
                 .onSuccess { all ->
                     val filtered = if (categoryId == "other") {
                         all.filter { it.categoryId == null }

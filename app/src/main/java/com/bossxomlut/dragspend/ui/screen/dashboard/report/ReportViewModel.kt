@@ -2,13 +2,11 @@ package com.bossxomlut.dragspend.ui.screen.dashboard.report
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.bossxomlut.dragspend.data.model.MonthlyReportRow
-import com.bossxomlut.dragspend.data.model.TransactionType
-import com.bossxomlut.dragspend.domain.repository.TransactionRepository
+import com.bossxomlut.dragspend.domain.model.ReportEntry
+import com.bossxomlut.dragspend.domain.model.TransactionType
+import com.bossxomlut.dragspend.domain.usecase.transaction.GetMonthlyReportUseCase
 import com.bossxomlut.dragspend.util.AppLog
 import com.bossxomlut.dragspend.util.toFriendlyMessage
-import io.github.jan.supabase.SupabaseClient
-import io.github.jan.supabase.auth.auth
 import java.time.YearMonth
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -43,26 +41,17 @@ data class ReportUiState(
 
 
 class ReportViewModel(
-    private val supabase: SupabaseClient,
-    private val transactionRepository: TransactionRepository,
+    private val getMonthlyReportUseCase: GetMonthlyReportUseCase,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(ReportUiState())
     val uiState: StateFlow<ReportUiState> = _uiState.asStateFlow()
 
-    private val currentUserId get() = supabase.auth.currentUserOrNull()?.id
-
-    /**
-     * In-memory cache: yearMonth ("yyyy-MM") → processed ReportUiState.
-     * Switching back to a previously loaded month is instant (no network call).
-     */
     private val monthCache = mutableMapOf<String, ReportUiState>()
 
     fun loadReport(yearMonth: String) {
-        val userId = currentUserId ?: return
-        AppLog.d(AppLog.Feature.REPORT, "loadReport", "userId=${userId.take(8)}, yearMonth=$yearMonth")
+        AppLog.d(AppLog.Feature.REPORT, "loadReport", "yearMonth=$yearMonth")
 
-        // Cache hit → show immediately, no network call
         val cached = monthCache[yearMonth]
         if (cached != null) {
             AppLog.d(AppLog.Feature.REPORT, "loadReport", "cache hit for $yearMonth")
@@ -70,56 +59,51 @@ class ReportViewModel(
             return
         }
 
-        // Cache miss → keep current data visible while loading (no blank screen)
         _uiState.update { it.copy(isLoading = true) }
         viewModelScope.launch {
-            transactionRepository.getMonthlyReport(userId, yearMonth)
-                .onSuccess { rows ->
-                    processReport(rows, yearMonth)
-                    // Store processed state in cache
+            getMonthlyReportUseCase(yearMonth)
+                .onSuccess { entries ->
+                    processReport(entries, yearMonth)
                     monthCache[yearMonth] = _uiState.value
                 }
                 .onFailure { e -> _uiState.update { it.copy(isLoading = false, errorMessage = e.toFriendlyMessage()) } }
         }
     }
 
-    private fun processReport(rows: List<MonthlyReportRow>, yearMonth: String) {
+    private fun processReport(entries: List<ReportEntry>, yearMonth: String) {
         val dailyMap = mutableMapOf<Int, Pair<Long, Long>>()
         val categoryMap = mutableMapOf<String, CategorySlice>()
         var totalExpense = 0L
         var totalIncome = 0L
 
-        rows.forEach { row ->
-            val day = row.date.substring(8, 10).toIntOrNull() ?: return@forEach
+        entries.forEach { entry ->
+            val day = entry.date.substring(8, 10).toIntOrNull() ?: return@forEach
             val current = dailyMap[day] ?: (0L to 0L)
-            if (row.type == TransactionType.EXPENSE) {
-                dailyMap[day] = current.copy(first = current.first + row.total)
-                totalExpense += row.total
-                val catKey = row.categoryId ?: "other"
+            if (entry.type == TransactionType.EXPENSE) {
+                dailyMap[day] = current.copy(first = current.first + entry.total)
+                totalExpense += entry.total
+                val catKey = entry.categoryId ?: "other"
                 val existing = categoryMap[catKey]
                 categoryMap[catKey] = CategorySlice(
-                    categoryId = row.categoryId,
-                    name = row.categoryName ?: "Other",
-                    icon = row.categoryIcon ?: "📦",
-                    color = row.categoryColor ?: "#9E9E9E",
-                    amount = (existing?.amount ?: 0L) + row.total,
+                    categoryId = entry.categoryId,
+                    name = entry.categoryName ?: "Other",
+                    icon = entry.categoryIcon ?: "📦",
+                    color = entry.categoryColor ?: "#9E9E9E",
+                    amount = (existing?.amount ?: 0L) + entry.total,
                 )
             } else {
-                dailyMap[day] = current.copy(second = current.second + row.total)
-                totalIncome += row.total
+                dailyMap[day] = current.copy(second = current.second + entry.total)
+                totalIncome += entry.total
             }
         }
 
-        // Fill all days of the month so the bar chart always shows a complete grid
         val daysInMonth = YearMonth.parse(yearMonth).lengthOfMonth()
-        val dailyBars = (1..daysInMonth)
-            .map { day ->
-                val pair = dailyMap[day] ?: (0L to 0L)
-                DailyBarData(day = day, expense = pair.first, income = pair.second)
-            }
+        val dailyBars = (1..daysInMonth).map { day ->
+            val pair = dailyMap[day] ?: (0L to 0L)
+            DailyBarData(day = day, expense = pair.first, income = pair.second)
+        }
 
         val categorySlices = categoryMap.values.sortedByDescending { it.amount }
-
         val expenseDays = dailyBars.count { it.expense > 0 }
         val avgDaily = if (expenseDays > 0) totalExpense / expenseDays else 0L
         val highestDay = dailyBars.maxOfOrNull { it.expense } ?: 0L
@@ -142,10 +126,6 @@ class ReportViewModel(
         )
     }
 
-    /**
-     * Removes the cached report for [yearMonth] and fetches fresh data.
-     * Called by ReportScreen when the Today screen signals that transactions were mutated.
-     */
     fun invalidateAndReload(yearMonth: String) {
         AppLog.d(AppLog.Feature.REPORT, "invalidateAndReload", "yearMonth=$yearMonth")
         monthCache.remove(yearMonth)

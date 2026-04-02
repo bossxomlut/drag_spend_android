@@ -2,12 +2,11 @@ package com.bossxomlut.dragspend.ui.screen.search
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.bossxomlut.dragspend.data.model.Category
-import com.bossxomlut.dragspend.data.model.Transaction
-import com.bossxomlut.dragspend.domain.repository.CategoryRepository
-import com.bossxomlut.dragspend.domain.repository.TransactionRepository
-import io.github.jan.supabase.SupabaseClient
-import io.github.jan.supabase.auth.auth
+import com.bossxomlut.dragspend.domain.model.Category
+import com.bossxomlut.dragspend.domain.model.Transaction
+import com.bossxomlut.dragspend.domain.usecase.category.GetCategoriesUseCase
+import com.bossxomlut.dragspend.domain.usecase.transaction.SearchTransactionsUseCase
+import com.bossxomlut.dragspend.util.toFriendlyMessage
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 import kotlinx.coroutines.Job
@@ -31,15 +30,12 @@ data class SearchUiState(
 )
 
 class SearchViewModel(
-    private val transactionRepository: TransactionRepository,
-    private val categoryRepository: CategoryRepository,
-    private val supabase: SupabaseClient,
+    private val searchTransactionsUseCase: SearchTransactionsUseCase,
+    private val getCategoriesUseCase: GetCategoriesUseCase,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(SearchUiState())
     val uiState: StateFlow<SearchUiState> = _uiState.asStateFlow()
-
-    private val currentUserId get() = supabase.auth.currentUserOrNull()?.id
 
     init {
         loadCategories()
@@ -47,8 +43,7 @@ class SearchViewModel(
 
     private fun loadCategories() {
         viewModelScope.launch {
-            val userId = currentUserId ?: return@launch
-            categoryRepository.getCategories(userId).onSuccess { cats ->
+            getCategoriesUseCase().onSuccess { cats ->
                 _uiState.update { it.copy(categories = cats) }
             }
         }
@@ -118,7 +113,6 @@ class SearchViewModel(
             return
         }
 
-        val userId = currentUserId ?: return
         _uiState.update { it.copy(isLoading = true, error = null) }
 
         // When no explicit date range is set, default to last 3 months to avoid pulling
@@ -128,8 +122,7 @@ class SearchViewModel(
         val effectiveStart = state.startDate ?: today.minusMonths(3).format(dateFormatter)
         val effectiveEnd = state.endDate ?: today.format(dateFormatter)
 
-        transactionRepository.searchTransactions(
-            userId = userId,
+        searchTransactionsUseCase(
             query = state.query,
             categoryIds = state.selectedCategoryIds,
             startDate = effectiveStart,

@@ -17,7 +17,7 @@ import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.navArgument
-import com.bossxomlut.dragspend.data.model.Profile
+import com.bossxomlut.dragspend.data.model.ProfileDto
 import com.bossxomlut.dragspend.ui.screen.account.AccountDeletedScreen
 import com.bossxomlut.dragspend.ui.screen.auth.ForgotPasswordScreen
 import com.bossxomlut.dragspend.ui.screen.auth.LoginScreen
@@ -69,7 +69,7 @@ fun AppNavGraph(
             }
             val profile = supabase.from("profiles")
                 .select { filter { eq("id", userId) } }
-                .decodeSingleOrNull<Profile>()
+                .decodeSingleOrNull<ProfileDto>()
 
             startDestination = when {
                 profile?.deletedAt != null -> StartDestination.ACCOUNT_DELETED

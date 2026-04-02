@@ -1,7 +1,7 @@
 package com.bossxomlut.dragspend.domain.repository
 
-import com.bossxomlut.dragspend.data.model.Category
-import com.bossxomlut.dragspend.data.model.TransactionType
+import com.bossxomlut.dragspend.domain.model.Category
+import com.bossxomlut.dragspend.domain.model.TransactionType
 
 interface CategoryRepository {
     suspend fun getCategories(userId: String): Result<List<Category>>

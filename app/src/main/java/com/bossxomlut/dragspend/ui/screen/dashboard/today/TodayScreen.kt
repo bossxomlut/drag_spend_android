@@ -133,10 +133,10 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.bossxomlut.dragspend.R
-import com.bossxomlut.dragspend.data.model.DayTotal
-import com.bossxomlut.dragspend.data.model.SpendingCard
-import com.bossxomlut.dragspend.data.model.Transaction
-import com.bossxomlut.dragspend.data.model.TransactionType
+import com.bossxomlut.dragspend.domain.model.DayTotal
+import com.bossxomlut.dragspend.domain.model.SpendingCard
+import com.bossxomlut.dragspend.domain.model.Transaction
+import com.bossxomlut.dragspend.domain.model.TransactionType
 import com.bossxomlut.dragspend.ui.components.AppToast
 import com.bossxomlut.dragspend.ui.components.CategoryIcon
 import com.bossxomlut.dragspend.ui.components.ConfirmDialog
@@ -583,7 +583,7 @@ fun TodayScreen(
 private fun DayView(
     selectedDate: String,
     transactions: List<Transaction>,
-    dayTotal: com.bossxomlut.dragspend.data.model.DayTotal,
+    dayTotal: com.bossxomlut.dragspend.domain.model.DayTotal,
     onDateChange: (String) -> Unit,
     onEditTransaction: (Transaction) -> Unit,
     onDeleteTransaction: (Transaction) -> Unit,
@@ -1879,7 +1879,7 @@ private fun SpendingCardsPanel(
                         position = 0,
                     ),
                 ),
-                dayTotal = com.bossxomlut.dragspend.data.model.DayTotal("2026-03-17", 0, 150_000),
+                dayTotal = com.bossxomlut.dragspend.domain.model.DayTotal("2026-03-17", 0, 150_000),
                 onDateChange = {},
                 onEditTransaction = {},
                 onDeleteTransaction = {},
@@ -1903,13 +1903,13 @@ private fun SpendingCardsPanelPreview() {
                     title = "Ăn sáng",
                     type = TransactionType.EXPENSE,
                     variants = listOf(
-                        com.bossxomlut.dragspend.data.model.CardVariant(
+                        com.bossxomlut.dragspend.domain.model.CardVariant(
                             id = "v1",
                             cardId = "1",
                             amount = 25_000,
                             isDefault = true,
                         ),
-                        com.bossxomlut.dragspend.data.model.CardVariant(
+                        com.bossxomlut.dragspend.domain.model.CardVariant(
                             id = "v2",
                             cardId = "1",
                             amount = 35_000,
@@ -1923,7 +1923,7 @@ private fun SpendingCardsPanelPreview() {
                     title = "Nhậu nhẹt",
                     type = TransactionType.EXPENSE,
                     variants = listOf(
-                        com.bossxomlut.dragspend.data.model.CardVariant(
+                        com.bossxomlut.dragspend.domain.model.CardVariant(
                             id = "v3",
                             cardId = "2",
                             amount = 100_000,

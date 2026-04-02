@@ -2,13 +2,14 @@ package com.bossxomlut.dragspend.ui.screen.dashboard.today
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.bossxomlut.dragspend.data.model.Transaction
+import com.bossxomlut.dragspend.domain.model.Transaction
 import com.bossxomlut.dragspend.domain.repository.CreateTransactionRequest
-import com.bossxomlut.dragspend.domain.repository.TransactionRepository
 import com.bossxomlut.dragspend.domain.repository.UpdateTransactionRequest
+import com.bossxomlut.dragspend.domain.usecase.transaction.CreateTransactionUseCase
+import com.bossxomlut.dragspend.domain.usecase.transaction.DeleteTransactionUseCase
+import com.bossxomlut.dragspend.domain.usecase.transaction.GetDailyTransactionsUseCase
+import com.bossxomlut.dragspend.domain.usecase.transaction.UpdateTransactionUseCase
 import com.bossxomlut.dragspend.util.toFriendlyMessage
-import io.github.jan.supabase.SupabaseClient
-import io.github.jan.supabase.auth.auth
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -22,20 +23,19 @@ data class DayDetailUiState(
 )
 
 class DayDetailViewModel(
-    private val supabase: SupabaseClient,
-    private val transactionRepository: TransactionRepository,
+    private val getDailyTransactionsUseCase: GetDailyTransactionsUseCase,
+    private val createTransactionUseCase: CreateTransactionUseCase,
+    private val updateTransactionUseCase: UpdateTransactionUseCase,
+    private val deleteTransactionUseCase: DeleteTransactionUseCase,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(DayDetailUiState())
     val uiState: StateFlow<DayDetailUiState> = _uiState.asStateFlow()
 
-    private val currentUserId get() = supabase.auth.currentUserOrNull()?.id
-
     fun loadTransactions(date: String) {
-        val userId = currentUserId ?: return
         _uiState.update { it.copy(isLoading = true) }
         viewModelScope.launch {
-            transactionRepository.getTransactions(userId, date)
+            getDailyTransactionsUseCase(date)
                 .onSuccess { txns ->
                     _uiState.update { it.copy(transactions = txns, isLoading = false) }
                 }
@@ -47,7 +47,7 @@ class DayDetailViewModel(
 
     fun addTransaction(request: CreateTransactionRequest) {
         viewModelScope.launch {
-            transactionRepository.createTransaction(request)
+            createTransactionUseCase(request)
                 .onSuccess { created ->
                     _uiState.update { state ->
                         state.copy(transactions = state.transactions + created)
@@ -61,7 +61,7 @@ class DayDetailViewModel(
 
     fun updateTransaction(transactionId: String, request: UpdateTransactionRequest) {
         viewModelScope.launch {
-            transactionRepository.updateTransaction(transactionId, request)
+            updateTransactionUseCase(transactionId, request)
                 .onSuccess { updated ->
                     _uiState.update { state ->
                         state.copy(
@@ -82,7 +82,7 @@ class DayDetailViewModel(
             state.copy(transactions = state.transactions.filterNot { it.id == transactionId })
         }
         viewModelScope.launch {
-            transactionRepository.deleteTransaction(transactionId)
+            deleteTransactionUseCase(transactionId)
                 .onFailure { e ->
                     _uiState.update { it.copy(errorMessage = e.toFriendlyMessage()) }
                 }

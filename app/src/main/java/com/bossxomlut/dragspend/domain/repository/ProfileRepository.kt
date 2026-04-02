@@ -1,6 +1,6 @@
 package com.bossxomlut.dragspend.domain.repository
 
-import com.bossxomlut.dragspend.data.model.Profile
+import com.bossxomlut.dragspend.domain.model.Profile
 
 interface ProfileRepository {
     suspend fun getProfile(userId: String): Result<Profile>

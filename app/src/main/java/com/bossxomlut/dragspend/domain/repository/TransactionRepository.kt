@@ -1,8 +1,8 @@
 package com.bossxomlut.dragspend.domain.repository
 
-import com.bossxomlut.dragspend.data.model.MonthlyReportRow
-import com.bossxomlut.dragspend.data.model.Transaction
-import com.bossxomlut.dragspend.data.model.TransactionType
+import com.bossxomlut.dragspend.domain.model.ReportEntry
+import com.bossxomlut.dragspend.domain.model.Transaction
+import com.bossxomlut.dragspend.domain.model.TransactionType
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
@@ -53,7 +53,7 @@ data class UpdateTransactionRequest(
 interface TransactionRepository {
     suspend fun getTransactions(userId: String, date: String): Result<List<Transaction>>
     suspend fun getMonthlyTransactions(userId: String, yearMonth: String): Result<List<Transaction>>
-    suspend fun getMonthlyReport(userId: String, yearMonth: String): Result<List<MonthlyReportRow>>
+    suspend fun getMonthlyReport(userId: String, yearMonth: String): Result<List<ReportEntry>>
     suspend fun createTransaction(request: CreateTransactionRequest): Result<Transaction>
     suspend fun updateTransaction(transactionId: String, request: UpdateTransactionRequest): Result<Transaction>
     suspend fun deleteTransaction(transactionId: String): Result<Unit>

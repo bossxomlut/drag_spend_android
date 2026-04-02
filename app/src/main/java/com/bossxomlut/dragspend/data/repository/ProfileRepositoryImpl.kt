@@ -1,6 +1,9 @@
 package com.bossxomlut.dragspend.data.repository
 
-import com.bossxomlut.dragspend.data.model.Profile
+import com.bossxomlut.dragspend.data.model.ProfileDto
+import com.bossxomlut.dragspend.data.model.toDomain
+import com.bossxomlut.dragspend.domain.error.mapToAppError
+import com.bossxomlut.dragspend.domain.model.Profile
 import com.bossxomlut.dragspend.domain.repository.ProfileRepository
 import com.bossxomlut.dragspend.util.AppLog
 import com.bossxomlut.dragspend.util.logResult
@@ -21,8 +24,10 @@ class ProfileRepositoryImpl(
             .select {
                 filter { eq("id", userId) }
             }
-            .decodeSingle<Profile>()
+            .decodeSingle<ProfileDto>()
+            .toDomain()
     }.logResult(AppLog.Feature.PROFILE, "getProfile") { "name=${it.name}" }
+        .mapToAppError()
 
     override suspend fun ensureUserSeeded(
         userId: String,
@@ -37,6 +42,7 @@ class ProfileRepositoryImpl(
         }
         supabase.postgrest.rpc("ensure_user_seeded", params).decodeSingle<Boolean>()
     }.logResult(AppLog.Feature.PROFILE, "ensureUserSeeded") { "seeded=$it" }
+        .mapToAppError()
 
     override suspend fun updateLanguage(userId: String, language: String): Result<Unit> = runCatching {
         AppLog.d(AppLog.Feature.PROFILE, "updateLanguage", "language=$language")
@@ -46,6 +52,7 @@ class ProfileRepositoryImpl(
             }
         Unit
     }.logResult(AppLog.Feature.PROFILE, "updateLanguage") { "ok" }
+        .mapToAppError()
 
     override suspend fun updateName(userId: String, name: String): Result<Unit> = runCatching {
         AppLog.d(AppLog.Feature.PROFILE, "updateName", "name=$name")
@@ -55,6 +62,7 @@ class ProfileRepositoryImpl(
             }
         Unit
     }.logResult(AppLog.Feature.PROFILE, "updateName") { "ok" }
+        .mapToAppError()
 
     override suspend fun softDeleteAccount(userId: String): Result<Unit> = runCatching {
         AppLog.d(AppLog.Feature.PROFILE, "softDeleteAccount", "userId=${userId.take(8)}")
@@ -64,4 +72,5 @@ class ProfileRepositoryImpl(
             }
         Unit
     }.logResult(AppLog.Feature.PROFILE, "softDeleteAccount") { "ok" }
+        .mapToAppError()
 }

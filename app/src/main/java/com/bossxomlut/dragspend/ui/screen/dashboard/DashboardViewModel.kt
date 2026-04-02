@@ -2,12 +2,12 @@ package com.bossxomlut.dragspend.ui.screen.dashboard
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.bossxomlut.dragspend.data.model.Category
-import com.bossxomlut.dragspend.data.model.TransactionType
-import com.bossxomlut.dragspend.domain.repository.CategoryRepository
+import com.bossxomlut.dragspend.domain.model.Category
+import com.bossxomlut.dragspend.domain.model.TransactionType
+import com.bossxomlut.dragspend.domain.repository.SessionRepository
+import com.bossxomlut.dragspend.domain.usecase.category.CreateCategoryUseCase
+import com.bossxomlut.dragspend.domain.usecase.category.GetCategoriesUseCase
 import com.bossxomlut.dragspend.util.AppLog
-import io.github.jan.supabase.SupabaseClient
-import io.github.jan.supabase.auth.auth
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -18,8 +18,9 @@ import java.time.YearMonth
 import java.time.format.DateTimeFormatter
 
 class DashboardViewModel(
-    private val supabase: SupabaseClient,
-    private val categoryRepository: CategoryRepository,
+    private val sessionRepository: SessionRepository,
+    private val getCategoriesUseCase: GetCategoriesUseCase,
+    private val createCategoryUseCase: CreateCategoryUseCase,
 ) : ViewModel() {
 
     private val dateFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd")
@@ -34,21 +35,14 @@ class DashboardViewModel(
     private val _categories = MutableStateFlow<List<Category>>(emptyList())
     val categories: StateFlow<List<Category>> = _categories.asStateFlow()
 
-    /**
-     * Months that were mutated on the Today screen and whose cached report is now stale.
-     * ReportScreen observes this and invalidates its own cache when the viewed month is dirty.
-     */
     private val _dirtyReportMonths = MutableStateFlow<Set<String>>(emptySet())
     val dirtyReportMonths: StateFlow<Set<String>> = _dirtyReportMonths.asStateFlow()
 
-    /**
-     * Individual dates mutated on DayDetailScreen so TodayScreen can invalidate its cache.
-     */
     private val _dirtyDays = MutableStateFlow<Set<String>>(emptySet())
     val dirtyDays: StateFlow<Set<String>> = _dirtyDays.asStateFlow()
 
     val currentUserId: String?
-        get() = supabase.auth.currentUserOrNull()?.id
+        get() = sessionRepository.getCurrentUserId()
 
     init {
         loadCategories()
@@ -87,7 +81,7 @@ class DashboardViewModel(
         val userId = currentUserId ?: return
         AppLog.d(AppLog.Feature.DASHBOARD, "loadCategories", "userId=${userId.take(8)}")
         viewModelScope.launch {
-            categoryRepository.getCategories(userId)
+            getCategoriesUseCase()
                 .onSuccess { _categories.value = it }
         }
     }
@@ -97,10 +91,9 @@ class DashboardViewModel(
     }
 
     fun createCategory(name: String, icon: String, color: String, type: TransactionType) {
-        val userId = currentUserId ?: return
         AppLog.d(AppLog.Feature.DASHBOARD, "createCategory", "name=$name, type=$type")
         viewModelScope.launch {
-            categoryRepository.createCategory(userId, name, icon, color, type, "vi")
+            createCategoryUseCase(name, icon, color, type, "vi")
                 .onSuccess { loadCategories() }
         }
     }

@@ -4,20 +4,27 @@ import android.os.Build
 import androidx.annotation.RequiresApi
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.bossxomlut.dragspend.data.model.DayTotal
-import com.bossxomlut.dragspend.data.model.SpendingCard
-import com.bossxomlut.dragspend.data.model.Transaction
-import com.bossxomlut.dragspend.data.model.TransactionType
-import com.bossxomlut.dragspend.domain.repository.CardRepository
+import com.bossxomlut.dragspend.domain.model.DayTotal
+import com.bossxomlut.dragspend.domain.model.SpendingCard
+import com.bossxomlut.dragspend.domain.model.Transaction
+import com.bossxomlut.dragspend.domain.model.TransactionType
 import com.bossxomlut.dragspend.domain.repository.CreateCardRequest
 import com.bossxomlut.dragspend.domain.repository.CreateTransactionRequest
-import com.bossxomlut.dragspend.domain.repository.CreateVariantRequest
-import com.bossxomlut.dragspend.domain.repository.TransactionRepository
+import com.bossxomlut.dragspend.domain.repository.SessionRepository
 import com.bossxomlut.dragspend.domain.repository.UpdateTransactionRequest
+import com.bossxomlut.dragspend.domain.usecase.card.CreateCardUseCase
+import com.bossxomlut.dragspend.domain.usecase.card.DeleteCardUseCase
+import com.bossxomlut.dragspend.domain.usecase.card.GetCardsUseCase
+import com.bossxomlut.dragspend.domain.usecase.card.IncrementCardUseCountUseCase
+import com.bossxomlut.dragspend.domain.usecase.card.UpdateCardUseCase
+import com.bossxomlut.dragspend.domain.usecase.transaction.CopyFromYesterdayUseCase
+import com.bossxomlut.dragspend.domain.usecase.transaction.CreateTransactionUseCase
+import com.bossxomlut.dragspend.domain.usecase.transaction.DeleteTransactionUseCase
+import com.bossxomlut.dragspend.domain.usecase.transaction.GetDailyTransactionsUseCase
+import com.bossxomlut.dragspend.domain.usecase.transaction.GetMonthlyTransactionsUseCase
+import com.bossxomlut.dragspend.domain.usecase.transaction.UpdateTransactionUseCase
 import com.bossxomlut.dragspend.util.AppLog
 import com.bossxomlut.dragspend.util.toFriendlyMessage
-import io.github.jan.supabase.SupabaseClient
-import io.github.jan.supabase.auth.auth
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -34,7 +41,6 @@ data class TodayUiState(
     val isLoadingCards: Boolean = false,
     val isLoadingTransactions: Boolean = false,
     val isLoadingMonthlyTotals: Boolean = false,
-    /** Day totals for all days in the currently viewed month. Keyed by "yyyy-MM-dd". */
     val monthDayTotals: Map<String, DayTotal> = emptyMap(),
     val errorMessage: String? = null,
 ) {
@@ -46,11 +52,19 @@ data class TodayUiState(
         }
 }
 
-
 class TodayViewModel(
-    private val supabase: SupabaseClient,
-    private val cardRepository: CardRepository,
-    private val transactionRepository: TransactionRepository,
+    private val sessionRepository: SessionRepository,
+    private val getCardsUseCase: GetCardsUseCase,
+    private val createCardUseCase: CreateCardUseCase,
+    private val updateCardUseCase: UpdateCardUseCase,
+    private val deleteCardUseCase: DeleteCardUseCase,
+    private val incrementCardUseCountUseCase: IncrementCardUseCountUseCase,
+    private val getDailyTransactionsUseCase: GetDailyTransactionsUseCase,
+    private val getMonthlyTransactionsUseCase: GetMonthlyTransactionsUseCase,
+    private val createTransactionUseCase: CreateTransactionUseCase,
+    private val updateTransactionUseCase: UpdateTransactionUseCase,
+    private val deleteTransactionUseCase: DeleteTransactionUseCase,
+    private val copyFromYesterdayUseCase: CopyFromYesterdayUseCase,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(TodayUiState())
@@ -58,39 +72,24 @@ class TodayViewModel(
 
     @RequiresApi(Build.VERSION_CODES.O)
     private val dateFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd")
-    private val currentUserId get() = supabase.auth.currentUserOrNull()?.id
+    private val currentUserId get() = sessionRepository.getCurrentUserId()
 
-    /** Holds the latest debounced loadData job so it can be cancelled on rapid date changes. */
     private var loadDataJob: Job? = null
-
-    /**
-     * In-memory cache: yearMonth ("yyyy-MM") → map of date ("yyyy-MM-dd") → DayTotal.
-     * Persists across date navigation within the same session.
-     */
     private val monthTotalsCache = mutableMapOf<String, Map<String, DayTotal>>()
-
-    /**
-     * Per-day transaction cache: date ("yyyy-MM-dd") → list of transactions.
-     * Avoids a network round-trip when navigating back to a previously loaded date.
-     */
     private val dailyTransactionsCache = mutableMapOf<String, List<Transaction>>()
-
-    /** True once cards have been successfully loaded at least once in this session. */
     private var cardsInitialized = false
 
     fun loadData(date: String) {
-        val userId = currentUserId ?: run {
+        if (currentUserId == null) {
             AppLog.w(AppLog.Feature.TRANSACTION, "loadData", "no authenticated user")
             return
         }
         AppLog.d(AppLog.Feature.TRANSACTION, "loadData", "date=$date")
 
-        // Cards are session-level data; load once, then rely on CRUD methods to keep fresh.
         if (!cardsInitialized) {
-            viewModelScope.launch { loadCards(userId) }
+            viewModelScope.launch { loadCards() }
         }
 
-        // Cache hit: show transactions immediately with no network call.
         val cached = dailyTransactionsCache[date]
         if (cached != null) {
             AppLog.d(AppLog.Feature.TRANSACTION, "loadData", "cache hit for $date")
@@ -98,20 +97,15 @@ class TodayViewModel(
             return
         }
 
-        // Cache miss: debounced fetch.
         loadDataJob?.cancel()
         _uiState.update { it.copy(isLoadingTransactions = true) }
         loadDataJob = viewModelScope.launch {
-            delay(300L) // debounce: only fires if no new call arrives within 300 ms
+            delay(300L)
             AppLog.d(AppLog.Feature.TRANSACTION, "loadData", "date=$date, executing after debounce")
-            loadTransactions(userId, date)
+            loadTransactions(date)
         }
     }
 
-    /**
-     * Loads day totals for every day in the given [yearMonth] ("yyyy-MM").
-     * Returns immediately from cache if already loaded; otherwise fetches and caches.
-     */
     fun loadMonthlyTotals(yearMonth: String) {
         val cached = monthTotalsCache[yearMonth]
         if (cached != null) {
@@ -119,14 +113,12 @@ class TodayViewModel(
             _uiState.update { it.copy(monthDayTotals = cached) }
             return
         }
-        val userId = currentUserId ?: return
         AppLog.d(AppLog.Feature.TRANSACTION, "loadMonthlyTotals", "fetching $yearMonth")
         viewModelScope.launch {
             _uiState.update { it.copy(isLoadingMonthlyTotals = true) }
-            transactionRepository.getMonthlyTransactions(userId, yearMonth)
+            getMonthlyTransactionsUseCase(yearMonth)
                 .onSuccess { txns ->
-                    val totalsMap = txns
-                        .groupBy { it.date }
+                    val totalsMap = txns.groupBy { it.date }
                         .mapValues { (date, list) ->
                             val inc = list.filter { it.type == TransactionType.INCOME }.sumOf { it.amount }
                             val exp = list.filter { it.type == TransactionType.EXPENSE }.sumOf { it.amount }
@@ -141,28 +133,21 @@ class TodayViewModel(
         }
     }
 
-    /**
-     * Invalidates the cache for [yearMonth] and re-fetches so that after a transaction
-     * is added/deleted the calendar grid reflects the new total.
-     */
     fun invalidateMonthCache(yearMonth: String) {
         monthTotalsCache.remove(yearMonth)
         loadMonthlyTotals(yearMonth)
     }
 
-    /**
-     * Removes [date] from the daily transactions cache so the next [loadData] call re-fetches.
-     */
     fun invalidateDayCache(date: String) {
         dailyTransactionsCache.remove(date)
         AppLog.d(AppLog.Feature.TRANSACTION, "invalidateDayCache", "date=$date")
     }
 
-    private fun loadCards(userId: String) {
-        AppLog.d(AppLog.Feature.CARD, "loadCards", "userId=${userId.take(8)}")
+    private fun loadCards() {
+        AppLog.d(AppLog.Feature.CARD, "loadCards")
         viewModelScope.launch {
             _uiState.update { it.copy(isLoadingCards = true) }
-            cardRepository.getCards(userId)
+            getCardsUseCase()
                 .onSuccess { cards ->
                     cardsInitialized = true
                     _uiState.update { it.copy(cards = cards, isLoadingCards = false) }
@@ -173,11 +158,11 @@ class TodayViewModel(
         }
     }
 
-    fun loadTransactions(userId: String, date: String) {
-        AppLog.d(AppLog.Feature.TRANSACTION, "loadTransactions", "userId=${userId.take(8)}, date=$date")
+    fun loadTransactions(date: String) {
+        AppLog.d(AppLog.Feature.TRANSACTION, "loadTransactions", "date=$date")
         viewModelScope.launch {
             _uiState.update { it.copy(isLoadingTransactions = true) }
-            transactionRepository.getTransactions(userId, date)
+            getDailyTransactionsUseCase(date)
                 .onSuccess { txns ->
                     dailyTransactionsCache[date] = txns
                     _uiState.update { it.copy(transactions = txns, isLoadingTransactions = false) }
@@ -209,15 +194,13 @@ class TodayViewModel(
                 type = card.type,
                 note = null,
             )
-            transactionRepository.createTransaction(request)
+            createTransactionUseCase(request)
                 .onSuccess { created ->
-                    // Optimistically append the new transaction (use category from card to avoid extra reload)
                     val newTx = created.copy(category = card.category)
                     val updatedList = _uiState.value.transactions + newTx
                     dailyTransactionsCache[date] = updatedList
                     _uiState.update { it.copy(transactions = updatedList) }
-                    cardRepository.incrementUseCount(card.id)
-                    // Invalidate calendar cache so the day dot reflects new total
+                    incrementCardUseCountUseCase(card.id)
                     invalidateMonthCache(date.substring(0, 7))
                 }
                 .onFailure { e ->
@@ -233,28 +216,26 @@ class TodayViewModel(
         deletedDate?.let { dailyTransactionsCache[it] = updatedTransactions }
         _uiState.update { it.copy(transactions = updatedTransactions) }
         viewModelScope.launch {
-            transactionRepository.deleteTransaction(transactionId)
+            deleteTransactionUseCase(transactionId)
                 .onSuccess {
                     deletedDate?.let { date -> invalidateMonthCache(date.substring(0, 7)) }
                 }
                 .onFailure { e ->
-                    val userId = currentUserId ?: return@launch
-                    loadTransactions(userId, _uiState.value.transactions.firstOrNull()?.date ?: return@launch)
+                    val date = _uiState.value.transactions.firstOrNull()?.date ?: return@launch
+                    loadTransactions(date)
                     _uiState.update { it.copy(errorMessage = e.toFriendlyMessage()) }
                 }
         }
     }
 
     fun updateTransaction(transactionId: String, request: UpdateTransactionRequest) {
-        val userId = currentUserId ?: return
         AppLog.d(AppLog.Feature.TRANSACTION, "updateTransaction", "id=$transactionId, amount=${request.amount}, type=${request.type}")
         val oldDate = _uiState.value.transactions.firstOrNull { it.id == transactionId }?.date
         viewModelScope.launch {
-            transactionRepository.updateTransaction(transactionId, request)
+            updateTransactionUseCase(transactionId, request)
                 .onSuccess { updated ->
                     val newDate = updated.date
                     if (oldDate != null && oldDate != newDate) {
-                        // Date changed: remove from old date's cache and invalidate the new date's cache.
                         dailyTransactionsCache[oldDate] = dailyTransactionsCache[oldDate]
                             ?.filterNot { it.id == transactionId } ?: emptyList()
                         dailyTransactionsCache.remove(newDate)
@@ -273,18 +254,17 @@ class TodayViewModel(
                 .onFailure { e ->
                     _uiState.update { it.copy(errorMessage = e.toFriendlyMessage()) }
                     val date = _uiState.value.transactions.firstOrNull()?.date ?: return@launch
-                    loadTransactions(userId, date)
+                    loadTransactions(date)
                 }
         }
     }
 
     @RequiresApi(Build.VERSION_CODES.O)
     fun copyFromYesterday(date: String) {
-        val userId = currentUserId ?: return
         val yesterday = LocalDate.parse(date, dateFormatter).minusDays(1).format(dateFormatter)
         AppLog.d(AppLog.Feature.TRANSACTION, "copyFromYesterday", "from=$yesterday, to=$date")
         viewModelScope.launch {
-            transactionRepository.copyFromYesterday(userId, yesterday, date)
+            copyFromYesterdayUseCase(yesterday, date)
                 .onSuccess { copied ->
                     val updatedList = _uiState.value.transactions + copied
                     dailyTransactionsCache[date] = updatedList
@@ -297,21 +277,19 @@ class TodayViewModel(
     }
 
     fun createCard(request: CreateCardRequest) {
-        val userId = currentUserId ?: return
         AppLog.d(AppLog.Feature.CARD, "createCard", "title=${request.title}, type=${request.type}")
         viewModelScope.launch {
-            cardRepository.createCard(request)
-                .onSuccess { loadCards(userId) }
+            createCardUseCase(request)
+                .onSuccess { loadCards() }
                 .onFailure { e -> _uiState.update { it.copy(errorMessage = e.toFriendlyMessage()) } }
         }
     }
 
     fun updateCard(cardId: String, request: CreateCardRequest) {
-        val userId = currentUserId ?: return
         AppLog.d(AppLog.Feature.CARD, "updateCard", "id=$cardId, title=${request.title}")
         viewModelScope.launch {
-            cardRepository.updateCard(cardId, request)
-                .onSuccess { loadCards(userId) }
+            updateCardUseCase(cardId, request)
+                .onSuccess { loadCards() }
                 .onFailure { e -> _uiState.update { it.copy(errorMessage = e.toFriendlyMessage()) } }
         }
     }
@@ -319,7 +297,7 @@ class TodayViewModel(
     fun deleteCard(cardId: String) {
         AppLog.d(AppLog.Feature.CARD, "deleteCard", "id=$cardId")
         viewModelScope.launch {
-            cardRepository.deleteCard(cardId)
+            deleteCardUseCase(cardId)
                 .onSuccess { _uiState.update { it.copy(cards = it.cards.filterNot { c -> c.id == cardId }) } }
                 .onFailure { e -> _uiState.update { it.copy(errorMessage = e.toFriendlyMessage()) } }
         }

@@ -4,7 +4,7 @@ import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
 @Serializable
-enum class TransactionType {
+enum class TransactionTypeDto {
     @SerialName("income")
     INCOME,
 

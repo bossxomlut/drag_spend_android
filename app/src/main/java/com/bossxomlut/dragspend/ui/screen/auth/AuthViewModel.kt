@@ -2,19 +2,20 @@ package com.bossxomlut.dragspend.ui.screen.auth
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.bossxomlut.dragspend.domain.repository.ProfileRepository
+import com.bossxomlut.dragspend.domain.repository.SessionRepository
+import com.bossxomlut.dragspend.domain.usecase.profile.GetProfileUseCase
 import com.bossxomlut.dragspend.util.AppLog
 import com.bossxomlut.dragspend.util.toFriendlyMessage
 import io.github.jan.supabase.SupabaseClient
 import io.github.jan.supabase.auth.OtpType
 import io.github.jan.supabase.auth.auth
 import io.github.jan.supabase.auth.providers.builtin.Email
-import kotlinx.serialization.json.buildJsonObject
-import kotlinx.serialization.json.put
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 
 sealed interface AuthUiState {
     data object Idle : AuthUiState
@@ -35,7 +36,8 @@ sealed interface AuthUiState {
 
 class AuthViewModel(
     private val supabase: SupabaseClient,
-    private val profileRepository: ProfileRepository,
+    private val sessionRepository: SessionRepository,
+    private val getProfileUseCase: GetProfileUseCase,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow<AuthUiState>(AuthUiState.Idle)
@@ -52,12 +54,11 @@ class AuthViewModel(
                 }
             }.onSuccess {
                 AppLog.success(AppLog.Feature.AUTH, "login")
-                val userId = supabase.auth.currentUserOrNull()?.id
-                if (userId == null) {
+                if (!sessionRepository.isAuthenticated()) {
                     _uiState.value = AuthUiState.LoginSuccess(needsOnboarding = false)
                     return@onSuccess
                 }
-                val profile = profileRepository.getProfile(userId).getOrNull()
+                val profile = getProfileUseCase().getOrNull()
                 val needsOnboarding = profile?.language == null
                 AppLog.d(AppLog.Feature.AUTH, "login", "needsOnboarding=$needsOnboarding")
                 _uiState.value = AuthUiState.LoginSuccess(needsOnboarding = needsOnboarding)

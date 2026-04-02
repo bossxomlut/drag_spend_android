@@ -36,10 +36,10 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.bossxomlut.dragspend.R
-import com.bossxomlut.dragspend.data.model.Category
-import com.bossxomlut.dragspend.data.model.SpendingCard
-import com.bossxomlut.dragspend.data.model.Transaction
-import com.bossxomlut.dragspend.data.model.TransactionType
+import com.bossxomlut.dragspend.domain.model.Category
+import com.bossxomlut.dragspend.domain.model.SpendingCard
+import com.bossxomlut.dragspend.domain.model.Transaction
+import com.bossxomlut.dragspend.domain.model.TransactionType
 import com.bossxomlut.dragspend.domain.repository.UpdateTransactionRequest
 import com.bossxomlut.dragspend.ui.components.AmountTextField
 import com.bossxomlut.dragspend.ui.theme.DragSpendTheme

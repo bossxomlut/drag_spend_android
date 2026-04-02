@@ -4,7 +4,7 @@ import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
 @Serializable
-data class Profile(
+data class ProfileDto(
     val id: String,
     val name: String? = null,
     val currency: String = "VND",

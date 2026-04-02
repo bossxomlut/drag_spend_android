@@ -1,7 +1,11 @@
 package com.bossxomlut.dragspend.data.repository
 
-import com.bossxomlut.dragspend.data.model.Category
-import com.bossxomlut.dragspend.data.model.TransactionType
+import com.bossxomlut.dragspend.data.model.CategoryDto
+import com.bossxomlut.dragspend.data.model.toDomain
+import com.bossxomlut.dragspend.data.model.toDto
+import com.bossxomlut.dragspend.domain.error.mapToAppError
+import com.bossxomlut.dragspend.domain.model.Category
+import com.bossxomlut.dragspend.domain.model.TransactionType
 import com.bossxomlut.dragspend.domain.repository.CategoryRepository
 import com.bossxomlut.dragspend.util.AppLog
 import com.bossxomlut.dragspend.util.logResult
@@ -28,9 +32,11 @@ class CategoryRepositoryImpl(
                     filter { eq("user_id", userId) }
                     order("name", order = Order.ASCENDING)
                 }
-                .decodeList<Category>()
+                .decodeList<CategoryDto>()
+                .map { it.toDomain() }
                 .also { cache[userId] = it }
         }.logResult(AppLog.Feature.CATEGORY, "getCategories") { "${it.size} categories" }
+            .mapToAppError()
     }
 
     override suspend fun createCategory(
@@ -52,13 +58,14 @@ class CategoryRepositoryImpl(
         )
         supabase.from("categories")
             .insert(row) { select() }
-            .decodeSingle<Category>()
+            .decodeSingle<CategoryDto>()
+            .toDomain()
             .also { created ->
-                // Append to cache (keep sorted by name)
                 cache[userId] = ((cache[userId] ?: emptyList()) + created)
                     .sortedBy { it.name }
             }
     }.logResult(AppLog.Feature.CATEGORY, "createCategory") { "id=${it.id}" }
+        .mapToAppError()
 
     override suspend fun updateCategory(category: Category): Result<Category> = runCatching {
         AppLog.d(AppLog.Feature.CATEGORY, "updateCategory", "id=${category.id}, name=${category.name}")
@@ -66,14 +73,15 @@ class CategoryRepositoryImpl(
             "name" to category.name,
             "icon" to category.icon,
             "color" to category.color,
-            "type" to category.type.name.lowercase(),
+            "type" to category.type.toDto().name.lowercase(),
         )
         supabase.from("categories")
             .update(row) {
                 filter { eq("id", category.id) }
                 select()
             }
-            .decodeSingle<Category>()
+            .decodeSingle<CategoryDto>()
+            .toDomain()
             .also { updated ->
                 val userId = updated.userId
                 cache[userId] = ((cache[userId] ?: emptyList())
@@ -81,6 +89,7 @@ class CategoryRepositoryImpl(
                     .sortedBy { it.name }
             }
     }.logResult(AppLog.Feature.CATEGORY, "updateCategory") { "id=${it.id}" }
+        .mapToAppError()
 
     override suspend fun deleteCategory(categoryId: String): Result<Unit> = runCatching {
         AppLog.d(AppLog.Feature.CATEGORY, "deleteCategory", "id=$categoryId")
@@ -96,4 +105,5 @@ class CategoryRepositoryImpl(
             }
         Unit
     }.logResult(AppLog.Feature.CATEGORY, "deleteCategory") { "deleted" }
+        .mapToAppError()
 }
