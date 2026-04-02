@@ -14,6 +14,7 @@ import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -26,12 +27,14 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -59,6 +62,7 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -66,9 +70,15 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
@@ -81,7 +91,10 @@ import com.bossxomlut.dragspend.domain.model.TransactionType
 import com.bossxomlut.dragspend.ui.components.CategoryIcon
 import com.bossxomlut.dragspend.ui.theme.DragSpendTheme
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import com.bossxomlut.dragspend.util.CurrencyFormatter
+import java.text.Normalizer
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
@@ -90,7 +103,7 @@ import java.util.Locale
 import org.koin.androidx.compose.koinViewModel
 
 @RequiresApi(Build.VERSION_CODES.O)
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
 fun SearchScreen(
     onNavigateBack: () -> Unit,
@@ -98,6 +111,23 @@ fun SearchScreen(
     viewModel: SearchViewModel = koinViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+
+    val focusRequester = remember { FocusRequester() }
+    val keyboardController = LocalSoftwareKeyboardController.current
+    val focusManager = LocalFocusManager.current
+    val lazyListState = rememberLazyListState()
+
+    // Auto-focus the search field when the screen opens so the keyboard appears immediately.
+    LaunchedEffect(Unit) {
+        focusRequester.requestFocus()
+    }
+
+    // Dismiss the keyboard when the user starts scrolling the results list.
+    LaunchedEffect(lazyListState.isScrollInProgress) {
+        if (lazyListState.isScrollInProgress) {
+            focusManager.clearFocus()
+        }
+    }
 
     Scaffold(
         modifier = modifier,
@@ -145,7 +175,8 @@ fun SearchScreen(
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(innerPadding),
+                .padding(innerPadding)
+                .imePadding(),
         ) {
             // Search text field
             OutlinedTextField(
@@ -153,7 +184,8 @@ fun SearchScreen(
                 onValueChange = viewModel::onQueryChange,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 8.dp),
+                    .padding(horizontal = 16.dp, vertical = 8.dp)
+                    .focusRequester(focusRequester),
                 placeholder = {
                     Text(
                         text = stringResource(R.string.search_placeholder_name),
@@ -303,22 +335,27 @@ fun SearchScreen(
                 else -> {
                     val context = LocalContext.current
                     val appLocale = context.resources.configuration.locales[0]
-                    val grouped = uiState.results.groupBy { it.date }
-                    val dateFormatter = DateTimeFormatter.ofPattern("EEEE, dd/MM/yyyy", appLocale)
-                    val dayFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd")
+                    val dateFormatter = remember(appLocale) { DateTimeFormatter.ofPattern("EEEE, dd/MM/yyyy", appLocale) }
+                    val dayFormatter = remember { DateTimeFormatter.ofPattern("yyyy-MM-dd") }
+                    val grouped = remember(uiState.results) { uiState.results.groupBy { it.date } }
+                    val groupTotals = remember(grouped) {
+                        grouped.mapValues { (_, txns) ->
+                            val exp = txns.filter { it.type == TransactionType.EXPENSE }.sumOf { it.amount }
+                            val inc = txns.filter { it.type == TransactionType.INCOME }.sumOf { it.amount }
+                            exp to inc
+                        }
+                    }
 
                     LazyColumn(
+                        state = lazyListState,
                         modifier = Modifier.weight(1f),
                         contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
                         verticalArrangement = Arrangement.spacedBy(6.dp),
                     ) {
                         grouped.forEach { (date, transactions) ->
-                            val totalExpense = transactions.filter { it.type == TransactionType.EXPENSE }
-                                .sumOf { it.amount }
-                            val totalIncome = transactions.filter { it.type == TransactionType.INCOME }
-                                .sumOf { it.amount }
+                            val (totalExpense, totalIncome) = groupTotals[date] ?: (0L to 0L)
 
-                            item(key = "header_$date") {
+                            stickyHeader(key = "header_$date") {
                                 SearchDateHeader(
                                     date = date,
                                     dateFormatter = dateFormatter,
@@ -328,7 +365,7 @@ fun SearchScreen(
                                 )
                             }
                             items(transactions, key = { it.id }) { transaction ->
-                                SearchTransactionItem(transaction = transaction)
+                                SearchTransactionItem(transaction = transaction, query = uiState.query)
                             }
                         }
                     }
@@ -355,6 +392,7 @@ private fun SearchDateHeader(
     Row(
         modifier = modifier
             .fillMaxWidth()
+            .background(MaterialTheme.colorScheme.background)
             .padding(top = 12.dp, bottom = 2.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.SpaceBetween,
@@ -389,6 +427,7 @@ private fun SearchDateHeader(
 @Composable
 private fun SearchTransactionItem(
     transaction: Transaction,
+    query: String = "",
     modifier: Modifier = Modifier,
 ) {
     val isExpense = transaction.type == TransactionType.EXPENSE
@@ -396,6 +435,16 @@ private fun SearchTransactionItem(
         MaterialTheme.colorScheme.error
     } else {
         MaterialTheme.colorScheme.tertiary
+    }
+    val highlightBg = MaterialTheme.colorScheme.primaryContainer
+    val highlightedTitle = remember(transaction.title, query, highlightBg) {
+        buildHighlightedText(transaction.title, query, highlightBg)
+    }
+    val highlightedCategory = remember(transaction.category?.name, query, highlightBg) {
+        transaction.category?.let { buildHighlightedText(it.name, query, highlightBg) }
+    }
+    val highlightedNote = remember(transaction.note, query, highlightBg) {
+        transaction.note?.takeIf { it.isNotBlank() }?.let { buildHighlightedText(it, query, highlightBg) }
     }
 
     Card(
@@ -427,26 +476,24 @@ private fun SearchTransactionItem(
                 Spacer(modifier = Modifier.width(10.dp))
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
-                        text = transaction.title,
+                        text = highlightedTitle,
                         style = MaterialTheme.typography.bodyMedium,
                         fontWeight = FontWeight.Medium,
                         color = MaterialTheme.colorScheme.onSurface,
                     )
-                    transaction.category?.let { cat ->
+                    highlightedCategory?.let {
                         Text(
-                            text = cat.name,
+                            text = it,
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
-                    transaction.note?.let { note ->
-                        if (note.isNotBlank()) {
-                            Text(
-                                text = note,
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                        }
+                    highlightedNote?.let {
+                        Text(
+                            text = it,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
                     }
                 }
                 Text(
@@ -456,6 +503,60 @@ private fun SearchTransactionItem(
                     fontWeight = FontWeight.Bold,
                     color = accentColor,
                 )
+            }
+        }
+    }
+}
+
+private val COMBINING_MARKS_REGEX = Regex("\\p{Mn}")
+private val WHITESPACE_REGEX = Regex("\\s+")
+
+/**
+ * Returns an [AnnotatedString] with every occurrence of each word in [query] highlighted
+ * using [highlightBackground]. Matching is diacritic-insensitive (e.g. "an" matches "ăn").
+ *
+ * The NFD-then-strip-combining normalisation preserves character count for NFC input
+ * (standard Android keyboard output), so indices in the normalised string map 1-to-1
+ * to indices in the original string — no complex remapping needed.
+ */
+private fun buildHighlightedText(
+    text: String,
+    query: String,
+    highlightBackground: Color,
+): AnnotatedString {
+    if (query.isBlank()) return AnnotatedString(text)
+
+    val normalizedFull = Normalizer.normalize(text, Normalizer.Form.NFD)
+        .replace(COMBINING_MARKS_REGEX, "")
+        .lowercase()
+
+    // Guard: if normalisation changed the length for any reason, skip highlighting
+    // to avoid out-of-bounds span indices.
+    if (normalizedFull.length != text.length) return AnnotatedString(text)
+
+    val words = query
+        .split(WHITESPACE_REGEX)
+        .filter { it.isNotBlank() }
+        .map {
+            Normalizer.normalize(it, Normalizer.Form.NFD)
+                .replace(COMBINING_MARKS_REGEX, "")
+                .lowercase()
+        }
+
+    return buildAnnotatedString {
+        append(text)
+        for (word in words) {
+            if (word.isEmpty()) continue
+            var start = 0
+            while (true) {
+                val idx = normalizedFull.indexOf(word, start)
+                if (idx < 0) break
+                addStyle(
+                    SpanStyle(background = highlightBackground),
+                    start = idx,
+                    end = idx + word.length,
+                )
+                start = idx + word.length
             }
         }
     }

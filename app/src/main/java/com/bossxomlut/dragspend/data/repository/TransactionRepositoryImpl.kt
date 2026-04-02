@@ -13,8 +13,6 @@ import com.bossxomlut.dragspend.domain.repository.UpdateTransactionRequest
 import com.bossxomlut.dragspend.util.AppLog
 import com.bossxomlut.dragspend.util.logResult
 import io.github.jan.supabase.SupabaseClient
-import java.time.LocalDate
-import java.time.format.DateTimeFormatter
 import io.github.jan.supabase.postgrest.from
 import io.github.jan.supabase.postgrest.postgrest
 import io.github.jan.supabase.postgrest.query.Order
@@ -184,56 +182,35 @@ class TransactionRepositoryImpl(
             "userId=${userId.take(8)}, query=$query, categories=$categoryIds, start=$startDate, end=$endDate",
         )
 
-        val dateFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd")
-        val start = startDate ?: LocalDate.now().minusMonths(3).format(dateFormatter)
-        val exclusiveEnd = endDate?.let {
-            LocalDate.parse(it, dateFormatter).plusDays(1).format(dateFormatter)
-        } ?: LocalDate.now().plusDays(1).format(dateFormatter)
+        // When exactly one category is selected we push it down to the RPC so
+        // the DB can filter early. For multiple categories we skip p_category_id
+        // and apply client-side filtering on the (already date+text-filtered) result.
+        val singleCategoryId = if (categoryIds.size == 1) categoryIds.first() else null
 
-        AppLog.d(
-            AppLog.Feature.TRANSACTION,
-            "searchTransactions",
-            "Querying with start=$start, exclusiveEnd=$exclusiveEnd",
-        )
+        val params = buildJsonObject {
+            put("p_user_id", userId)
+            put("p_query", query)
+            if (startDate != null) put("p_date_from", startDate)
+            if (endDate != null) put("p_date_to", endDate)
+            if (singleCategoryId != null) put("p_category_id", singleCategoryId)
+            put("p_limit", 500)
+            put("p_offset", 0)
+        }
 
-        val txns = supabase.from("transactions")
-            .select {
-                filter {
-                    eq("user_id", userId)
-                    gte("date", start)
-                    lt("date", exclusiveEnd)
-                }
-                order("date", order = Order.DESCENDING)
-                order("position", order = Order.ASCENDING)
-            }
+        val txns = supabase.postgrest
+            .rpc("search_transactions_unaccent", params)
             .decodeList<TransactionDto>()
 
         AppLog.d(
             AppLog.Feature.TRANSACTION,
             "searchTransactions",
-            "Server returned ${txns.size} transactions",
+            "RPC returned ${txns.size} rows",
         )
 
-        val withCategories = attachCategories(txns)
+        val results = attachCategories(txns)
 
-        val searchWords = query.lowercase().split(Regex("\\s+")).filter { it.isNotBlank() }
-
-        withCategories.filter { tx ->
-            val matchesQuery = if (searchWords.isEmpty()) {
-                true
-            } else {
-                val searchableText = buildString {
-                    append(tx.title.lowercase())
-                    append(" ")
-                    tx.note?.let { append(it.lowercase()); append(" ") }
-                    tx.category?.name?.let { append(it.lowercase()) }
-                }
-                searchWords.all { word -> searchableText.contains(word) }
-            }
-            val matchesCategory = categoryIds.isEmpty() || tx.categoryId in categoryIds
-            val matchesDateRange = tx.date >= start && tx.date < exclusiveEnd
-            matchesQuery && matchesCategory && matchesDateRange
-        }
+        // Apply multi-category filter client-side (single-category already handled by RPC)
+        if (categoryIds.size > 1) results.filter { it.categoryId in categoryIds } else results
     }.logResult(AppLog.Feature.TRANSACTION, "searchTransactions") { "${it.size} items" }
         .mapToAppError()
 
