@@ -14,6 +14,18 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
+sealed class ChartFilter {
+    data object All : ChartFilter()
+    data object ExpenseOnly : ChartFilter()
+    data object IncomeOnly : ChartFilter()
+    data class ByCategoryFilter(
+        val categoryId: String,
+        val name: String,
+        val icon: String,
+        val color: String,
+    ) : ChartFilter()
+}
+
 data class DailyBarData(
     val day: Int,
     val expense: Long,
@@ -31,6 +43,7 @@ data class CategorySlice(
 data class ReportUiState(
     val isLoading: Boolean = false,
     val dailyBars: List<DailyBarData> = emptyList(),
+    val categoryDailyBars: Map<String, List<Long>> = emptyMap(),
     val categorySlices: List<CategorySlice> = emptyList(),
     val totalExpense: Long = 0L,
     val totalIncome: Long = 0L,
@@ -73,6 +86,7 @@ class ReportViewModel(
     private fun processReport(entries: List<ReportEntry>, yearMonth: String) {
         val dailyMap = mutableMapOf<Int, Pair<Long, Long>>()
         val categoryMap = mutableMapOf<String, CategorySlice>()
+        val categoryDailyMapBuilder = mutableMapOf<String, MutableMap<Int, Long>>()
         var totalExpense = 0L
         var totalIncome = 0L
 
@@ -91,6 +105,8 @@ class ReportViewModel(
                     color = entry.categoryColor ?: "#9E9E9E",
                     amount = (existing?.amount ?: 0L) + entry.total,
                 )
+                val catDayMap = categoryDailyMapBuilder.getOrPut(catKey) { mutableMapOf() }
+                catDayMap[day] = (catDayMap[day] ?: 0L) + entry.total
             } else {
                 dailyMap[day] = current.copy(second = current.second + entry.total)
                 totalIncome += entry.total
@@ -103,6 +119,10 @@ class ReportViewModel(
             DailyBarData(day = day, expense = pair.first, income = pair.second)
         }
 
+        val categoryDailyBars = categoryDailyMapBuilder.mapValues { (_, dayAmounts) ->
+            (1..daysInMonth).map { day -> dayAmounts[day] ?: 0L }
+        }
+
         val categorySlices = categoryMap.values.sortedByDescending { it.amount }
         val expenseDays = dailyBars.count { it.expense > 0 }
         val avgDaily = if (expenseDays > 0) totalExpense / expenseDays else 0L
@@ -112,6 +132,7 @@ class ReportViewModel(
             it.copy(
                 isLoading = false,
                 dailyBars = dailyBars,
+                categoryDailyBars = categoryDailyBars,
                 categorySlices = categorySlices,
                 totalExpense = totalExpense,
                 totalIncome = totalIncome,

@@ -25,6 +25,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
@@ -52,6 +53,7 @@ fun DashboardScreen(
     dashboardViewModel: DashboardViewModel = koinViewModel(),
 ) {
     var selectedTab by rememberSaveable { mutableIntStateOf(0) }
+    val isBalanceHidden by dashboardViewModel.isBalanceHidden.collectAsStateWithLifecycle()
 
     val tabs = listOf(
         DashboardTab(
@@ -123,6 +125,8 @@ fun DashboardScreen(
         when (selectedTab) {
             0 -> TodayScreen(
                 dashboardViewModel = dashboardViewModel,
+                isBalanceHidden = isBalanceHidden,
+                onToggleBalanceVisibility = { dashboardViewModel.toggleBalanceVisibility() },
                 onNavigateToSettings = onNavigateToSettings,
                 onNavigateToSearch = onNavigateToSearch,
                 modifier = Modifier
@@ -131,6 +135,7 @@ fun DashboardScreen(
             )
             1 -> ReportScreen(
                 dashboardViewModel = dashboardViewModel,
+                isBalanceHidden = isBalanceHidden,
                 onNavigateToDayDetail = onNavigateToDayDetail,
                 onNavigateToCategoryDetail = onNavigateToCategoryDetail,
                 modifier = Modifier

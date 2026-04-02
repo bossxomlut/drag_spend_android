@@ -119,6 +119,11 @@
     <string name="day_detail_edit_mode_hint">Chế độ sửa: nhấn vào giao dịch để sửa hoặc xóa, nhấn + để thêm mới.</string>
     <string name="category_other">Khác</string>
     <string name="report_view_category_transactions">Xem giao dịch</string>
+    <string name="report_chart_filter_all">Tất cả</string>
+    <string name="report_chart_filter_title">Lọc biểu đồ</string>
+    <string name="report_chart_filter_by_category">Theo danh mục</string>
+    <string name="label_balance_hide">Ẩn số tiền</string>
+    <string name="label_balance_show">Hiện số tiền</string>
     <string name="action_previous_month">Tháng trước</string>
     <string name="action_next_month">Tháng sau</string>
     <string name="action_toggle_calendar">Xem tổng quan tháng</string>

@@ -26,20 +26,31 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.FilterList
 import androidx.compose.material.icons.filled.KeyboardArrowLeft
 import androidx.compose.material.icons.filled.KeyboardArrowRight
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.rememberModalBottomSheetState
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -85,6 +96,7 @@ import org.koin.androidx.compose.koinViewModel
 @Composable
 fun ReportScreen(
     dashboardViewModel: DashboardViewModel,
+    isBalanceHidden: Boolean = false,
     onNavigateToDayDetail: (date: String) -> Unit = {},
     onNavigateToCategoryDetail: (yearMonth: String, categoryId: String, categoryName: String, categoryIcon: String) -> Unit = { _, _, _, _ -> },
     modifier: Modifier = Modifier,
@@ -94,9 +106,25 @@ fun ReportScreen(
     val viewMonth by dashboardViewModel.viewMonth.collectAsStateWithLifecycle()
     var toastMessage by remember { mutableStateOf<String?>(null) }
     var selectedCategorySlice by remember { mutableStateOf<CategorySlice?>(null) }
+    var chartFilter by remember { mutableStateOf<ChartFilter>(ChartFilter.All) }
+    var showFilterSheet by remember { mutableStateOf(false) }
+    val filteredBars = remember(uiState.dailyBars, uiState.categoryDailyBars, chartFilter) {
+        when (val f = chartFilter) {
+            is ChartFilter.All -> uiState.dailyBars
+            is ChartFilter.ExpenseOnly -> uiState.dailyBars.map { it.copy(income = 0L) }
+            is ChartFilter.IncomeOnly -> uiState.dailyBars.map { it.copy(expense = 0L) }
+            is ChartFilter.ByCategoryFilter -> {
+                val catAmounts = uiState.categoryDailyBars[f.categoryId] ?: emptyList()
+                uiState.dailyBars.mapIndexed { i, bar ->
+                    bar.copy(expense = catAmounts.getOrElse(i) { 0L }, income = 0L)
+                }
+            }
+        }
+    }
 
     LaunchedEffect(viewMonth) {
         selectedCategorySlice = null
+        chartFilter = ChartFilter.All
         // If the Today screen mutated data for this month, bypass the cache and fetch fresh.
         if (viewMonth in dashboardViewModel.dirtyReportMonths.value) {
             reportViewModel.invalidateAndReload(viewMonth)
@@ -147,25 +175,35 @@ fun ReportScreen(
             }
 
             // Stats — always rendered; values animate smoothly when month changes
-            StatCards(uiState = uiState)
+            StatCards(uiState = uiState, isBalanceHidden = isBalanceHidden)
 
             NetBalanceBanner(
                 totalIncome = uiState.totalIncome,
                 totalExpense = uiState.totalExpense,
+                isBalanceHidden = isBalanceHidden,
             )
 
             // Charts — shown when there is data, or while loading (old data stays visible)
             if (uiState.dailyBars.isNotEmpty() || uiState.isLoading) {
                 ChartSectionCard(
                     title = stringResource(R.string.report_daily_chart_title),
+                    trailingAction = {
+                        ChartFilterButton(
+                            filter = chartFilter,
+                            onClick = { showFilterSheet = true },
+                        )
+                    },
                 ) {
                     Spacer(modifier = Modifier.height(6.dp))
-                    ChartLegendRow()
+                    ChartLegendRow(filter = chartFilter)
                     Spacer(modifier = Modifier.height(8.dp))
                     DailyBarChart(
-                        bars = uiState.dailyBars,
+                        bars = filteredBars,
                         viewMonth = viewMonth,
                         onBarTap = { date -> onNavigateToDayDetail(date) },
+                        primaryBarColor = (chartFilter as? ChartFilter.ByCategoryFilter)?.let { f ->
+                            runCatching { Color(android.graphics.Color.parseColor(f.color)) }.getOrNull()
+                        },
                         modifier = Modifier.fillMaxWidth(),
                     )
                 }
@@ -273,6 +311,19 @@ fun ReportScreen(
             onDismiss = { toastMessage = null },
             modifier = Modifier.align(Alignment.TopCenter).padding(top = 56.dp),
         )
+
+        if (showFilterSheet) {
+            ChartFilterBottomSheet(
+                filter = chartFilter,
+                categorySlices = uiState.categorySlices,
+                hasIncome = uiState.totalIncome > 0,
+                onFilterChange = {
+                    chartFilter = it
+                    showFilterSheet = false
+                },
+                onDismiss = { showFilterSheet = false },
+            )
+        }
     }
 }
 
@@ -326,7 +377,7 @@ private fun MonthNavigationHeader(
 }
 
 @Composable
-private fun StatCards(uiState: ReportUiState) {
+private fun StatCards(uiState: ReportUiState, isBalanceHidden: Boolean = false) {
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -338,6 +389,7 @@ private fun StatCards(uiState: ReportUiState) {
                 color = MaterialTheme.colorScheme.error,
                 containerColor = MaterialTheme.colorScheme.errorContainer,
                 icon = "💸",
+                isBalanceHidden = isBalanceHidden,
                 modifier = Modifier.weight(1f),
             )
             StatCard(
@@ -346,6 +398,7 @@ private fun StatCards(uiState: ReportUiState) {
                 color = MaterialTheme.colorScheme.tertiary,
                 containerColor = MaterialTheme.colorScheme.tertiaryContainer,
                 icon = "💰",
+                isBalanceHidden = isBalanceHidden,
                 modifier = Modifier.weight(1f),
             )
         }
@@ -359,6 +412,7 @@ private fun StatCards(uiState: ReportUiState) {
                 color = MaterialTheme.colorScheme.secondary,
                 containerColor = MaterialTheme.colorScheme.secondaryContainer,
                 icon = "📅",
+                isBalanceHidden = isBalanceHidden,
                 modifier = Modifier.weight(1f),
             )
             StatCard(
@@ -367,6 +421,7 @@ private fun StatCards(uiState: ReportUiState) {
                 color = MaterialTheme.colorScheme.primary,
                 containerColor = MaterialTheme.colorScheme.primaryContainer,
                 icon = "🔥",
+                isBalanceHidden = isBalanceHidden,
                 modifier = Modifier.weight(1f),
             )
         }
@@ -380,6 +435,7 @@ private fun StatCard(
     color: Color,
     containerColor: Color,
     icon: String,
+    isBalanceHidden: Boolean = false,
     modifier: Modifier = Modifier,
 ) {
     val animatedValue = remember { Animatable(0f) }
@@ -419,7 +475,7 @@ private fun StatCard(
                     overflow = TextOverflow.Ellipsis,
                 )
                 Text(
-                    text = CurrencyFormatter.formatCompact(animatedValue.value.toLong()),
+                    text = if (isBalanceHidden) "••••••" else CurrencyFormatter.formatCompact(animatedValue.value.toLong()),
                     style = MaterialTheme.typography.titleSmall,
                     fontWeight = FontWeight.Bold,
                     color = color,
@@ -435,6 +491,7 @@ private fun StatCard(
 private fun NetBalanceBanner(
     totalIncome: Long,
     totalExpense: Long,
+    isBalanceHidden: Boolean = false,
 ) {
     val net = totalIncome - totalExpense
     val isPositive = net >= 0
@@ -480,7 +537,7 @@ private fun NetBalanceBanner(
                     color = contentColor.copy(alpha = 0.75f),
                 )
                 Text(
-                    text = (if (animatedNet.value >= 0) "+" else "") + CurrencyFormatter.formatCompact(animatedNet.value.toLong()),
+                    text = if (isBalanceHidden) "••••••" else (if (animatedNet.value >= 0) "+" else "") + CurrencyFormatter.formatCompact(animatedNet.value.toLong()),
                     style = MaterialTheme.typography.titleLarge,
                     fontWeight = FontWeight.Bold,
                     color = contentColor,
@@ -494,6 +551,7 @@ private fun NetBalanceBanner(
 private fun ChartSectionCard(
     title: String,
     modifier: Modifier = Modifier,
+    trailingAction: (@Composable () -> Unit)? = null,
     content: @Composable () -> Unit,
 ) {
     Card(
@@ -504,31 +562,218 @@ private fun ChartSectionCard(
         modifier = modifier.fillMaxWidth(),
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
-            Text(
-                text = title,
-                style = MaterialTheme.typography.titleSmall,
-                fontWeight = FontWeight.SemiBold,
-                color = MaterialTheme.colorScheme.onSurface,
-            )
+            if (trailingAction != null) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        text = title,
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.onSurface,
+                    )
+                    trailingAction()
+                }
+            } else {
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onSurface,
+                )
+            }
             content()
         }
     }
 }
 
 @Composable
-private fun ChartLegendRow() {
+private fun ChartFilterButton(
+    filter: ChartFilter,
+    onClick: () -> Unit,
+) {
+    val isFiltered = filter !is ChartFilter.All
+    val label = when (filter) {
+        is ChartFilter.All -> stringResource(R.string.report_chart_filter_all)
+        is ChartFilter.ExpenseOnly -> "💸 ${stringResource(R.string.report_legend_expense)}"
+        is ChartFilter.IncomeOnly -> "💰 ${stringResource(R.string.report_legend_income)}"
+        is ChartFilter.ByCategoryFilter -> "${filter.icon} ${filter.name}"
+    }
+    Surface(
+        shape = RoundedCornerShape(20.dp),
+        color = if (isFiltered) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant,
+        modifier = Modifier
+            .clip(RoundedCornerShape(20.dp))
+            .clickable(onClick = onClick),
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
+            Icon(
+                imageVector = Icons.Default.FilterList,
+                contentDescription = null,
+                tint = if (isFiltered) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(14.dp),
+            )
+            Text(
+                text = label,
+                style = MaterialTheme.typography.labelSmall,
+                color = if (isFiltered) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                fontWeight = if (isFiltered) FontWeight.SemiBold else FontWeight.Normal,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun ChartFilterBottomSheet(
+    filter: ChartFilter,
+    categorySlices: List<CategorySlice>,
+    hasIncome: Boolean,
+    onFilterChange: (ChartFilter) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = sheetState,
+        containerColor = MaterialTheme.colorScheme.surface,
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 20.dp)
+                .padding(bottom = 32.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp),
+        ) {
+            Text(
+                text = stringResource(R.string.report_chart_filter_title),
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onSurface,
+            )
+
+            // Type filters row
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                listOf<Triple<ChartFilter, String, Boolean>>(
+                    Triple(ChartFilter.All, stringResource(R.string.report_chart_filter_all), true),
+                    Triple(ChartFilter.ExpenseOnly, "💸 ${stringResource(R.string.report_legend_expense)}", true),
+                    Triple(ChartFilter.IncomeOnly, "💰 ${stringResource(R.string.report_legend_income)}", hasIncome),
+                ).filter { it.third }.forEach { (option, label, _) ->
+                    val isSelected = when (option) {
+                        is ChartFilter.All -> filter is ChartFilter.All
+                        is ChartFilter.ExpenseOnly -> filter is ChartFilter.ExpenseOnly
+                        is ChartFilter.IncomeOnly -> filter is ChartFilter.IncomeOnly
+                        else -> false
+                    }
+                    FilterChip(
+                        selected = isSelected,
+                        onClick = { onFilterChange(option) },
+                        label = { Text(label, maxLines = 1) },
+                        modifier = Modifier.weight(1f),
+                    )
+                }
+            }
+
+            if (categorySlices.isNotEmpty()) {
+                Text(
+                    text = stringResource(R.string.report_chart_filter_by_category),
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                LazyVerticalGrid(
+                    columns = GridCells.Fixed(3),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    items(categorySlices) { slice ->
+                        val catId = slice.categoryId ?: "other"
+                        val isSelected = filter is ChartFilter.ByCategoryFilter &&
+                            (filter as ChartFilter.ByCategoryFilter).categoryId == catId
+                        val catColor = runCatching {
+                            Color(android.graphics.Color.parseColor(slice.color))
+                        }.getOrDefault(MaterialTheme.colorScheme.primary)
+                        Surface(
+                            shape = RoundedCornerShape(12.dp),
+                            color = if (isSelected) catColor.copy(alpha = 0.15f) else MaterialTheme.colorScheme.surfaceVariant,
+                            border = if (isSelected) BorderStroke(1.5.dp, catColor) else BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(12.dp))
+                                .clickable {
+                                    onFilterChange(
+                                        if (isSelected) ChartFilter.All
+                                        else ChartFilter.ByCategoryFilter(
+                                            categoryId = catId,
+                                            name = slice.name,
+                                            icon = slice.icon,
+                                            color = slice.color,
+                                        ),
+                                    )
+                                },
+                        ) {
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 12.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                verticalArrangement = Arrangement.spacedBy(4.dp),
+                            ) {
+                                Text(slice.icon, style = MaterialTheme.typography.titleMedium)
+                                Text(
+                                    text = slice.name,
+                                    style = MaterialTheme.typography.labelSmall,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                    color = if (isSelected) catColor else MaterialTheme.colorScheme.onSurfaceVariant,
+                                    fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal,
+                                    textAlign = TextAlign.Center,
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun ChartLegendRow(filter: ChartFilter = ChartFilter.All) {
+    val expenseColor = MaterialTheme.colorScheme.error
+    val incomeColor = MaterialTheme.colorScheme.primary
     Row(
-        horizontalArrangement = Arrangement.spacedBy(16.dp),
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        LegendDot(
-            color = MaterialTheme.colorScheme.error,
-            label = stringResource(R.string.report_legend_expense),
-        )
-        LegendDot(
-            color = MaterialTheme.colorScheme.primary,
-            label = stringResource(R.string.report_legend_income),
-        )
+        when (filter) {
+            is ChartFilter.All -> {
+                LegendDot(color = expenseColor, label = stringResource(R.string.report_legend_expense))
+                LegendDot(color = incomeColor, label = stringResource(R.string.report_legend_income))
+            }
+            is ChartFilter.ExpenseOnly ->
+                LegendDot(color = expenseColor, label = stringResource(R.string.report_legend_expense))
+            is ChartFilter.IncomeOnly ->
+                LegendDot(color = incomeColor, label = stringResource(R.string.report_legend_income))
+            is ChartFilter.ByCategoryFilter -> {
+                val catColor = runCatching {
+                    Color(android.graphics.Color.parseColor(filter.color))
+                }.getOrDefault(Color.Gray)
+                LegendDot(color = catColor, label = "${filter.icon} ${filter.name}")
+            }
+        }
     }
 }
 
@@ -557,8 +802,9 @@ private fun DailyBarChart(
     viewMonth: String,
     onBarTap: (date: String) -> Unit,
     modifier: Modifier = Modifier,
+    primaryBarColor: Color? = null,
 ) {
-    val expenseColor = MaterialTheme.colorScheme.error
+    val expenseColor = primaryBarColor ?: MaterialTheme.colorScheme.error
     val incomeColor = MaterialTheme.colorScheme.primary
     val gridColor = MaterialTheme.colorScheme.outlineVariant
     val labelColor = MaterialTheme.colorScheme.onSurfaceVariant.toArgb()

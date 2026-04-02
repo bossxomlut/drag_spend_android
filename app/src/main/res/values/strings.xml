@@ -119,6 +119,11 @@
     <string name="day_detail_edit_mode_hint">Edit mode: tap a transaction to edit or delete it, or press + to add new.</string>
     <string name="category_other">Other</string>
     <string name="report_view_category_transactions">View transactions</string>
+    <string name="report_chart_filter_all">All</string>
+    <string name="report_chart_filter_title">Filter chart</string>
+    <string name="report_chart_filter_by_category">By category</string>
+    <string name="label_balance_hide">Hide balances</string>
+    <string name="label_balance_show">Show balances</string>
     <string name="action_previous_month">Previous month</string>
     <string name="action_next_month">Next month</string>
     <string name="action_toggle_calendar">Toggle monthly overview</string>

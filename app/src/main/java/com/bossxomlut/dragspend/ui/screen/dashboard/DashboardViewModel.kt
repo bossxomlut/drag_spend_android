@@ -41,6 +41,13 @@ class DashboardViewModel(
     private val _dirtyDays = MutableStateFlow<Set<String>>(emptySet())
     val dirtyDays: StateFlow<Set<String>> = _dirtyDays.asStateFlow()
 
+    private val _isBalanceHidden = MutableStateFlow(false)
+    val isBalanceHidden: StateFlow<Boolean> = _isBalanceHidden.asStateFlow()
+
+    fun toggleBalanceVisibility() {
+        _isBalanceHidden.update { !it }
+    }
+
     val currentUserId: String?
         get() = sessionRepository.getCurrentUserId()
 
