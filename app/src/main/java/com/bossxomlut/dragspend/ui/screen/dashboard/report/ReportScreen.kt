@@ -826,19 +826,31 @@ private fun DailyBarChart(
         }
     }
 
+    // Round maxValue up to the next multiple of a "nice" step:
+    // - When leading digit is 1 (maxValue < 2×magnitude), use magnitude/10 as step → 125m → 130m
+    // - Otherwise use magnitude as step → 26m → 30m, 55m → 60m
+    val niceMax = remember(maxValue) {
+        val magnitude = Math.pow(10.0, Math.floor(Math.log10(maxValue.toDouble()))).toLong()
+        val step = if (maxValue < 2L * magnitude) maxOf(1L, magnitude / 10L) else magnitude
+        val remainder = maxValue % step
+        if (remainder == 0L) maxValue else maxValue + (step - remainder)
+    }
+
     Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(6.dp)) {
         Canvas(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(150.dp)
+                .height(160.dp)
                 .pointerInput(bars) {
                     detectTapGestures(onTap = { tapOffset ->
                         if (bars.isEmpty()) return@detectTapGestures
-                        val barWidth = size.width / (bars.size * 2.5f)
+                        val yAxisWidthPx = 40.dp.toPx()
+                        val availableWidth = size.width - yAxisWidthPx
+                        val barWidth = availableWidth / (bars.size * 2.5f)
                         val spacing = barWidth * 0.5f
                         var tappedIndex: Int? = null
                         bars.forEachIndexed { index, _ ->
-                            val groupCenter = index * (barWidth * 2 + spacing * 2) + spacing + barWidth / 2f
+                            val groupCenter = yAxisWidthPx + index * (barWidth * 2 + spacing * 2) + spacing + barWidth / 2f
                             val groupLeft = groupCenter - barWidth
                             val groupRight = groupCenter + barWidth + spacing * 1.5f
                             if (tapOffset.x in groupLeft..groupRight) {
@@ -850,25 +862,46 @@ private fun DailyBarChart(
                 },
         ) {
             val fraction = animFraction.value
+            val yAxisWidthPx = 40.dp.toPx()
             val labelAreaHeight = 18.dp.toPx()
             val chartHeight = size.height - labelAreaHeight
-            val barWidth = if (bars.isEmpty()) 0f else size.width / (bars.size * 2.5f)
+            val availableWidth = size.width - yAxisWidthPx
+            val barWidth = if (bars.isEmpty()) 0f else availableWidth / (bars.size * 2.5f)
             val spacing = barWidth * 0.5f
-            val maxBarHeight = chartHeight - 8f
+            val topPaddingPx = 20.dp.toPx()
+            val maxBarHeight = chartHeight - 8f - topPaddingPx
 
             val dashEffect = PathEffect.dashPathEffect(floatArrayOf(6f, 4f), 0f)
-            listOf(0.25f, 0.5f, 0.75f).forEach { level ->
+
+            // Y-axis labels + grid lines
+            val yAxisPaint = android.graphics.Paint().apply {
+                color = labelColor
+                textSize = 8.5f.dp.toPx()
+                textAlign = android.graphics.Paint.Align.RIGHT
+                isAntiAlias = true
+            }
+            listOf(0.25f, 0.5f, 0.75f, 1f).forEach { level ->
                 val y = chartHeight - level * maxBarHeight - 8f
+                // Grid line across chart area
                 drawLine(
                     color = gridColor,
-                    start = Offset(0f, y),
+                    start = Offset(yAxisWidthPx, y),
                     end = Offset(size.width, y),
-                    strokeWidth = 1f,
-                    pathEffect = dashEffect,
+                    strokeWidth = if (level == 1f) 1.5f else 1f,
+                    pathEffect = if (level == 1f) null else dashEffect,
+                )
+                // Y-axis label
+                val value = (niceMax * level).toLong()
+                drawContext.canvas.nativeCanvas.drawText(
+                    CurrencyFormatter.formatCompact(value),
+                    yAxisWidthPx - 4.dp.toPx(),
+                    y + yAxisPaint.textSize / 3f,
+                    yAxisPaint,
                 )
             }
 
-            val paint = android.graphics.Paint().apply {
+            // Day labels + bars
+            val dayLabelPaint = android.graphics.Paint().apply {
                 color = labelColor
                 textSize = 9.dp.toPx()
                 textAlign = android.graphics.Paint.Align.CENTER
@@ -878,10 +911,10 @@ private fun DailyBarChart(
             bars.forEachIndexed { index, bar ->
                 val highlighted = selectedIndex == null || selectedIndex == index
                 val alpha = if (highlighted) 1f else 0.3f
-                val groupCenter = index * (barWidth * 2 + spacing * 2) + spacing + barWidth / 2f
+                val groupCenter = yAxisWidthPx + index * (barWidth * 2 + spacing * 2) + spacing + barWidth / 2f
                 val cornerR = CornerRadius(barWidth / 2f, barWidth / 2f)
 
-                val expenseHeight = (bar.expense.toFloat() / maxValue) * maxBarHeight * fraction
+                val expenseHeight = (bar.expense.toFloat() / niceMax) * maxBarHeight * fraction
                 if (expenseHeight > 0f) {
                     drawRoundRect(
                         color = expenseColor.copy(alpha = alpha),
@@ -891,7 +924,7 @@ private fun DailyBarChart(
                     )
                 }
 
-                val incomeHeight = (bar.income.toFloat() / maxValue) * maxBarHeight * fraction
+                val incomeHeight = (bar.income.toFloat() / niceMax) * maxBarHeight * fraction
                 if (incomeHeight > 0f) {
                     drawRoundRect(
                         color = incomeColor.copy(alpha = alpha),
@@ -907,7 +940,7 @@ private fun DailyBarChart(
                         day.toString(),
                         groupCenter,
                         size.height - 2.dp.toPx(),
-                        paint,
+                        dayLabelPaint,
                     )
                 }
             }
