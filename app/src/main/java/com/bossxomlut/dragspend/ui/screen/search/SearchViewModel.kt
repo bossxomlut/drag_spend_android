@@ -9,13 +9,33 @@ import com.bossxomlut.dragspend.domain.usecase.transaction.SearchTransactionsUse
 import com.bossxomlut.dragspend.util.toFriendlyMessage
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.catch
+import kotlinx.coroutines.flow.debounce
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+
+private data class SearchParams(
+    val query: String,
+    val selectedCategoryIds: Set<String>,
+    val startDate: String?,
+    val endDate: String?,
+)
+
+private sealed interface SearchResult {
+    data object Loading : SearchResult
+    data object Empty : SearchResult
+    data class Success(val transactions: List<Transaction>) : SearchResult
+    data class Failure(val message: String) : SearchResult
+}
 
 data class SearchUiState(
     val query: String = "",
@@ -39,19 +59,14 @@ class SearchViewModel(
 
     init {
         loadCategories()
+        observeSearch()
     }
 
-    private fun loadCategories() {
-        viewModelScope.launch {
-            getCategoriesUseCase().onSuccess { cats ->
-                _uiState.update { it.copy(categories = cats) }
-            }
-        }
-    }
+    // ── Input handlers ───────────────────────────────────────────────────────
+    // UI only updates state — no side effects, no triggerSearch() calls.
 
     fun onQueryChange(query: String) {
         _uiState.update { it.copy(query = query) }
-        triggerSearch()
     }
 
     fun toggleCategory(categoryId: String) {
@@ -63,17 +78,14 @@ class SearchViewModel(
             }
             state.copy(selectedCategoryIds = updated)
         }
-        triggerSearch()
     }
 
     fun onStartDateChange(date: String?) {
         _uiState.update { it.copy(startDate = date) }
-        triggerSearch()
     }
 
     fun onEndDateChange(date: String?) {
         _uiState.update { it.copy(endDate = date) }
-        triggerSearch()
     }
 
     fun clearFilters() {
@@ -88,49 +100,86 @@ class SearchViewModel(
                 error = null,
             )
         }
-        searchJob?.cancel()
     }
 
-    private var searchJob: Job? = null
+    // ── Internal: categories ─────────────────────────────────────────────────
 
-    private fun triggerSearch() {
-        searchJob?.cancel()
-        searchJob = viewModelScope.launch {
-            delay(300)
-            performSearch()
+    private fun loadCategories() {
+        viewModelScope.launch {
+            getCategoriesUseCase().onSuccess { cats ->
+                _uiState.update { it.copy(categories = cats) }
+            }
         }
     }
 
-    private suspend fun performSearch() {
-        val state = _uiState.value
-        val hasFilters = state.query.isNotBlank() ||
-            state.selectedCategoryIds.isNotEmpty() ||
-            state.startDate != null ||
-            state.endDate != null
+    // ── Reactive search pipeline ─────────────────────────────────────────────
+    //
+    // _uiState → map(SearchParams) → debounce(300) → distinctUntilChanged
+    //   → flatMapLatest(searchFlow) → catch → collect → update _uiState
+    //
+    // flatMapLatest automatically cancels the previous API call when new input arrives.
+    // distinctUntilChanged prevents re-triggering when only results/loading change.
 
-        if (!hasFilters) {
-            _uiState.update { it.copy(results = emptyList(), hasSearched = false, isLoading = false) }
-            return
+    private fun observeSearch() {
+        viewModelScope.launch {
+            _uiState
+                .map { SearchParams(it.query, it.selectedCategoryIds, it.startDate, it.endDate) }
+                .debounce(300)
+                .distinctUntilChanged()
+                .flatMapLatest { params -> searchFlow(params) }
+                .catch { e -> emit(SearchResult.Failure(e.toFriendlyMessage())) }
+                .collect { result ->
+                    _uiState.update { state ->
+                        when (result) {
+                            SearchResult.Loading -> state.copy(isLoading = true, error = null)
+                            SearchResult.Empty -> state.copy(
+                                results = emptyList(),
+                                hasSearched = false,
+                                isLoading = false,
+                                error = null,
+                            )
+                            is SearchResult.Success -> state.copy(
+                                results = result.transactions,
+                                isLoading = false,
+                                hasSearched = true,
+                            )
+                            is SearchResult.Failure -> state.copy(
+                                error = result.message,
+                                isLoading = false,
+                                hasSearched = true,
+                            )
+                        }
+                    }
+                }
         }
+    }
 
-        _uiState.update { it.copy(isLoading = true, error = null) }
+    private fun searchFlow(params: SearchParams): Flow<SearchResult> {
+        val hasFilters = params.query.isNotBlank() ||
+            params.selectedCategoryIds.isNotEmpty() ||
+            params.startDate != null ||
+            params.endDate != null
+
+        if (!hasFilters) return flowOf(SearchResult.Empty)
 
         // When no explicit date range is set, default to last 3 months to avoid pulling
         // the entire transaction history from the server.
         val dateFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd")
         val today = LocalDate.now()
-        val effectiveStart = state.startDate ?: today.minusMonths(3).format(dateFormatter)
-        val effectiveEnd = state.endDate ?: today.format(dateFormatter)
+        val effectiveStart = params.startDate ?: today.minusMonths(3).format(dateFormatter)
+        val effectiveEnd = params.endDate ?: today.format(dateFormatter)
 
-        searchTransactionsUseCase(
-            query = state.query,
-            categoryIds = state.selectedCategoryIds,
-            startDate = effectiveStart,
-            endDate = effectiveEnd,
-        ).onSuccess { transactions ->
-            _uiState.update { it.copy(results = transactions, isLoading = false, hasSearched = true) }
-        }.onFailure { e ->
-            _uiState.update { it.copy(error = e.message, isLoading = false, hasSearched = true) }
+        return flow {
+            emit(SearchResult.Loading)
+            searchTransactionsUseCase(
+                query = params.query,
+                categoryIds = params.selectedCategoryIds,
+                startDate = effectiveStart,
+                endDate = effectiveEnd,
+            ).fold(
+                onSuccess = { emit(SearchResult.Success(it)) },
+                onFailure = { emit(SearchResult.Failure(it.toFriendlyMessage())) },
+            )
         }
     }
 }

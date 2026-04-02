@@ -26,6 +26,7 @@ import com.bossxomlut.dragspend.ui.screen.auth.RegisterScreen
 import com.bossxomlut.dragspend.ui.screen.auth.ResetPasswordScreen
 import com.bossxomlut.dragspend.ui.screen.dashboard.DashboardScreen
 import com.bossxomlut.dragspend.ui.screen.onboarding.LanguageScreen
+import com.bossxomlut.dragspend.ui.screen.search.SearchScreen
 import com.bossxomlut.dragspend.ui.screen.settings.SettingsScreen
 import io.github.jan.supabase.SupabaseClient
 import io.github.jan.supabase.auth.auth
@@ -222,6 +223,15 @@ fun AppNavGraph(
                     onNavigateToSettings = {
                         navController.navigate(Route.Settings.route)
                     },
+                    onNavigateToSearch = {
+                        navController.navigate(Route.Search.route)
+                    },
+                )
+            }
+
+            composable(Route.Search.route) {
+                SearchScreen(
+                    onNavigateBack = { navController.popBackStack() },
                 )
             }
 
