@@ -267,7 +267,9 @@ private fun LoginContent(
                     keyboardActions = KeyboardActions(
                         onDone = {
                             focusManager.clearFocus()
-                            onLogin(email, password)
+                            if (email.isNotBlank() && password.isNotBlank()) {
+                                onLogin(email, password)
+                            }
                         },
                     ),
                     modifier = Modifier
