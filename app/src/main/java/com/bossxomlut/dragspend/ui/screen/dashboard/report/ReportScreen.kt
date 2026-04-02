@@ -846,7 +846,7 @@ private fun DailyBarChart(
                         if (bars.isEmpty()) return@detectTapGestures
                         val yAxisWidthPx = 40.dp.toPx()
                         val availableWidth = size.width - yAxisWidthPx
-                        val barWidth = availableWidth / (bars.size * 2.5f)
+                        val barWidth = availableWidth / (bars.size * 3f)
                         val spacing = barWidth * 0.5f
                         var tappedIndex: Int? = null
                         bars.forEachIndexed { index, _ ->
@@ -866,7 +866,7 @@ private fun DailyBarChart(
             val labelAreaHeight = 18.dp.toPx()
             val chartHeight = size.height - labelAreaHeight
             val availableWidth = size.width - yAxisWidthPx
-            val barWidth = if (bars.isEmpty()) 0f else availableWidth / (bars.size * 2.5f)
+            val barWidth = if (bars.isEmpty()) 0f else availableWidth / (bars.size * 3f)
             val spacing = barWidth * 0.5f
             val topPaddingPx = 20.dp.toPx()
             val maxBarHeight = chartHeight - 8f - topPaddingPx
