@@ -57,6 +57,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -105,8 +106,10 @@ fun ReportScreen(
     val uiState by reportViewModel.uiState.collectAsStateWithLifecycle()
     val viewMonth by dashboardViewModel.viewMonth.collectAsStateWithLifecycle()
     var toastMessage by remember { mutableStateOf<String?>(null) }
-    var selectedCategorySlice by remember { mutableStateOf<CategorySlice?>(null) }
-    var chartFilter by remember { mutableStateOf<ChartFilter>(ChartFilter.All) }
+    val chartFilter by reportViewModel.chartFilter.collectAsStateWithLifecycle()
+    val selectedBarIndex by reportViewModel.selectedBarIndex.collectAsStateWithLifecycle()
+    val selectedSliceIndex by reportViewModel.selectedSliceIndex.collectAsStateWithLifecycle()
+    val selectedCategorySlice = selectedSliceIndex?.let { uiState.categorySlices.getOrNull(it) }
     var showFilterSheet by remember { mutableStateOf(false) }
     val filteredBars = remember(uiState.dailyBars, uiState.categoryDailyBars, chartFilter) {
         when (val f = chartFilter) {
@@ -122,15 +125,19 @@ fun ReportScreen(
         }
     }
 
+    // Gate: only run load/reset logic when the month actually changes,
+    // NOT when composable re-enters composition after navigation back.
+    var lastLoadedMonth by rememberSaveable { mutableStateOf("") }
     LaunchedEffect(viewMonth) {
-        selectedCategorySlice = null
-        chartFilter = ChartFilter.All
-        // If the Today screen mutated data for this month, bypass the cache and fetch fresh.
-        if (viewMonth in dashboardViewModel.dirtyReportMonths.value) {
-            reportViewModel.invalidateAndReload(viewMonth)
-            dashboardViewModel.clearDirtyReportMonth(viewMonth)
-        } else {
-            reportViewModel.loadReport(viewMonth)
+        val isDirty = viewMonth in dashboardViewModel.dirtyReportMonths.value
+        if (viewMonth != lastLoadedMonth || isDirty) {
+            lastLoadedMonth = viewMonth
+            if (isDirty) {
+                reportViewModel.invalidateAndReload(viewMonth)
+                dashboardViewModel.clearDirtyReportMonth(viewMonth)
+            } else {
+                reportViewModel.loadReport(viewMonth)
+            }
         }
     }
 
@@ -200,6 +207,8 @@ fun ReportScreen(
                     DailyBarChart(
                         bars = filteredBars,
                         viewMonth = viewMonth,
+                        selectedIndex = selectedBarIndex,
+                        onSelectedIndexChange = { reportViewModel.setSelectedBarIndex(it) },
                         onBarTap = { date -> onNavigateToDayDetail(date) },
                         primaryBarColor = (chartFilter as? ChartFilter.ByCategoryFilter)?.let { f ->
                             runCatching { Color(android.graphics.Color.parseColor(f.color)) }.getOrNull()
@@ -221,7 +230,10 @@ fun ReportScreen(
                             DonutChart(
                                 slices = uiState.categorySlices,
                                 totalExpense = uiState.totalExpense,
-                                onSliceSelected = { selectedCategorySlice = it },
+                                selectedSliceIndex = selectedSliceIndex,
+                                onSliceSelected = { index, _ ->
+                                    reportViewModel.setSelectedSliceIndex(index)
+                                },
                                 modifier = Modifier
                                     .weight(1f)
                                     .aspectRatio(1f),
@@ -318,7 +330,7 @@ fun ReportScreen(
                 categorySlices = uiState.categorySlices,
                 hasIncome = uiState.totalIncome > 0,
                 onFilterChange = {
-                    chartFilter = it
+                    reportViewModel.setChartFilter(it)
                     showFilterSheet = false
                 },
                 onDismiss = { showFilterSheet = false },
@@ -438,7 +450,8 @@ private fun StatCard(
     isBalanceHidden: Boolean = false,
     modifier: Modifier = Modifier,
 ) {
-    val animatedValue = remember { Animatable(0f) }
+    // Start at target value so navigation-back doesn't replay number animation from 0
+    val animatedValue = remember { Animatable(value.toFloat()) }
     LaunchedEffect(value) {
         animatedValue.animateTo(
             targetValue = value.toFloat(),
@@ -495,7 +508,8 @@ private fun NetBalanceBanner(
 ) {
     val net = totalIncome - totalExpense
     val isPositive = net >= 0
-    val animatedNet = remember { Animatable(0f) }
+    // Start at target value so navigation-back doesn't replay number animation from 0
+    val animatedNet = remember { Animatable(net.toFloat()) }
     LaunchedEffect(net) {
         animatedNet.animateTo(
             targetValue = net.toFloat(),
@@ -800,6 +814,8 @@ private fun LegendDot(color: Color, label: String) {
 private fun DailyBarChart(
     bars: List<DailyBarData>,
     viewMonth: String,
+    selectedIndex: Int?,
+    onSelectedIndexChange: (Int?) -> Unit,
     onBarTap: (date: String) -> Unit,
     modifier: Modifier = Modifier,
     primaryBarColor: Color? = null,
@@ -812,17 +828,24 @@ private fun DailyBarChart(
     val onSurfaceVariantColor = MaterialTheme.colorScheme.onSurfaceVariant
     val maxValue = bars.maxOfOrNull { maxOf(it.expense, it.income) }?.coerceAtLeast(1L) ?: 1L
 
-    var selectedIndex by remember(bars) { mutableStateOf<Int?>(null) }
     val selectedBar = selectedIndex?.let { bars.getOrNull(it) }
 
     val animFraction = remember { Animatable(1f) }
+    // prevBarsRef tracks the bars reference at first composition.
+    // On first mount (including navigation return), both prevBarsRef and bars point to the
+    // same object → LaunchedEffect skips the animation → chart stays at full height.
+    // Animation only triggers when bars genuinely changes content (filter/month switch).
+    var prevBarsRef by remember { mutableStateOf(bars) }
     LaunchedEffect(bars) {
-        if (bars.isNotEmpty()) {
+        if (bars.isNotEmpty() && bars != prevBarsRef) {
+            prevBarsRef = bars
             animFraction.snapTo(0f)
             animFraction.animateTo(
                 targetValue = 1f,
                 animationSpec = tween(durationMillis = 700, easing = FastOutSlowInEasing),
             )
+        } else {
+            prevBarsRef = bars
         }
     }
 
@@ -857,7 +880,8 @@ private fun DailyBarChart(
                                 tappedIndex = index
                             }
                         }
-                        selectedIndex = if (tappedIndex == selectedIndex) null else tappedIndex
+                        val newIndex = if (tappedIndex == selectedIndex) null else tappedIndex
+                        onSelectedIndexChange(newIndex)
                     })
                 },
         ) {
@@ -996,28 +1020,33 @@ private fun DailyBarChart(
 private fun DonutChart(
     slices: List<CategorySlice>,
     totalExpense: Long,
-    onSliceSelected: (CategorySlice?) -> Unit = {},
+    selectedSliceIndex: Int?,
+    onSliceSelected: (Int?, CategorySlice?) -> Unit = { _, _ -> },
     modifier: Modifier = Modifier,
 ) {
     val total = slices.sumOf { it.amount }.toFloat().coerceAtLeast(1f)
     val expenseColor = MaterialTheme.colorScheme.error
     val onSurfaceVariantColor = MaterialTheme.colorScheme.onSurfaceVariant
 
-    var selectedSliceIndex by remember(slices) { mutableStateOf<Int?>(null) }
     val selectedSlice = selectedSliceIndex?.let { slices.getOrNull(it) }
 
     val animFraction = remember { Animatable(1f) }
+    var prevSlicesRef by remember { mutableStateOf(slices) }
     LaunchedEffect(slices) {
-        if (slices.isNotEmpty()) {
+        if (slices.isNotEmpty() && slices != prevSlicesRef) {
+            prevSlicesRef = slices
             animFraction.snapTo(0f)
             animFraction.animateTo(
                 targetValue = 1f,
                 animationSpec = tween(durationMillis = 700, easing = FastOutSlowInEasing),
             )
+        } else {
+            prevSlicesRef = slices
         }
     }
 
-    val animatedExpense = remember { Animatable(0f) }
+    // Start at target so navigation-back doesn't replay from 0
+    val animatedExpense = remember { Animatable(totalExpense.toFloat()) }
     LaunchedEffect(totalExpense) {
         animatedExpense.animateTo(
             targetValue = totalExpense.toFloat(),
@@ -1037,8 +1066,7 @@ private fun DonutChart(
                 val dy = tapOffset.y - center.y
                 val distFromCenter = sqrt(dx * dx + dy * dy)
                 if (distFromCenter < innerRadius * 0.8f || distFromCenter > outerRadius + 12f) {
-                    selectedSliceIndex = null
-                    onSliceSelected(null)
+                    onSliceSelected(null, null)
                     return@detectTapGestures
                 }
                 var angle = Math.toDegrees(atan2(dy.toDouble(), dx.toDouble())).toFloat() + 90f
@@ -1053,8 +1081,8 @@ private fun DonutChart(
                     }
                     accumulatedAngle += sweep + gapAngle
                 }
-                selectedSliceIndex = if (tappedIndex == selectedSliceIndex) null else tappedIndex
-                onSliceSelected(selectedSliceIndex?.let { slices.getOrNull(it) })
+                val newIndex = if (tappedIndex == selectedSliceIndex) null else tappedIndex
+                onSliceSelected(newIndex, newIndex?.let { slices.getOrNull(it) })
             })
         },
         contentAlignment = Alignment.Center,

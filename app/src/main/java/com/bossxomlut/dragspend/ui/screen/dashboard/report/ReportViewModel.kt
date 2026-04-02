@@ -60,15 +60,50 @@ class ReportViewModel(
     private val _uiState = MutableStateFlow(ReportUiState())
     val uiState: StateFlow<ReportUiState> = _uiState.asStateFlow()
 
+    private val _chartFilter = MutableStateFlow<ChartFilter>(ChartFilter.All)
+    val chartFilter: StateFlow<ChartFilter> = _chartFilter.asStateFlow()
+
+    private val _selectedBarIndex = MutableStateFlow<Int?>(null)
+    val selectedBarIndex: StateFlow<Int?> = _selectedBarIndex.asStateFlow()
+
+    private val _selectedSliceIndex = MutableStateFlow<Int?>(null)
+    val selectedSliceIndex: StateFlow<Int?> = _selectedSliceIndex.asStateFlow()
+
+    fun setChartFilter(filter: ChartFilter) {
+        _chartFilter.value = filter
+    }
+
+    fun setSelectedBarIndex(index: Int?) {
+        _selectedBarIndex.value = index
+    }
+
+    fun setSelectedSliceIndex(index: Int?) {
+        _selectedSliceIndex.value = index
+    }
+
     private val monthCache = mutableMapOf<String, ReportUiState>()
+    private var currentLoadedMonth: String? = null
 
     fun loadReport(yearMonth: String) {
         AppLog.d(AppLog.Feature.REPORT, "loadReport", "yearMonth=$yearMonth")
 
+        val monthChanged = yearMonth != currentLoadedMonth
+        if (monthChanged) {
+            _chartFilter.value = ChartFilter.All
+            _selectedBarIndex.value = null
+            _selectedSliceIndex.value = null
+        }
+        currentLoadedMonth = yearMonth
+
         val cached = monthCache[yearMonth]
         if (cached != null) {
-            AppLog.d(AppLog.Feature.REPORT, "loadReport", "cache hit for $yearMonth")
-            _uiState.value = cached
+            if (monthChanged) {
+                // Different month: push cached state so UI updates
+                _uiState.value = cached
+            }
+            // Same month + cache hit: ViewModel state is already correct (returning from navigation).
+            // Skip any update to avoid triggering re-animation / UI reset.
+            AppLog.d(AppLog.Feature.REPORT, "loadReport", "cache hit for $yearMonth (monthChanged=$monthChanged)")
             return
         }
 
