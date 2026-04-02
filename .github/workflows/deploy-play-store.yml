@@ -4,8 +4,6 @@ on:
   push:
     tags:
       - "v*" # e.g. v1.0.0, v1.2.3-rc1
-    branches:
-      - master # optional: also keep CI running on master without deploying
   workflow_dispatch:
     inputs:
       track:
@@ -105,6 +103,13 @@ jobs:
           track: ${{ github.event.inputs.track || 'internal' }}
           status: completed
 
+      # ── Extract commit info ────────────────────────────────────────────────
+      - name: Extract commit info
+        id: commit
+        run: |
+          echo "message=$(git log -1 --pretty=%s)" >> $GITHUB_OUTPUT
+          echo "time=$(git log -1 --pretty=%ci)" >> $GITHUB_OUTPUT
+
       # ── Telegram notification ────────────────────────────────────────────────
       - name: Notify Telegram – success
         if: success()
@@ -112,7 +117,9 @@ jobs:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
         run: |
-          TEXT="✅ *Drag Spend* build \`${GITHUB_REF_NAME}\` deployed to Play Store successfully\!%0A%0A🔗 [View run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})"
+          COMMIT_MSG=$(echo "${{ steps.commit.outputs.message }}" | sed 's/[_*[\]()~`>#+\-=|{}.!]/\\&/g')
+          COMMIT_TIME=$(echo "${{ steps.commit.outputs.time }}" | sed 's/[_*[\]()~`>#+\-=|{}.!]/\\&/g')
+          TEXT="✅ *Drag Spend* build \`${GITHUB_REF_NAME}\` deployed to Play Store successfully\!%0A%0A📝 *Commit:* ${COMMIT_MSG}%0A🕐 *Time:* ${COMMIT_TIME}%0A%0A🔗 [View run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})"
           curl -s -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
             -d chat_id="${TELEGRAM_CHAT_ID}" \
             -d parse_mode="MarkdownV2" \
@@ -124,7 +131,9 @@ jobs:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
         run: |
-          TEXT="❌ *Drag Spend* build \`${GITHUB_REF_NAME}\` FAILED\.%0A%0A🔗 [View run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})"
+          COMMIT_MSG=$(echo "${{ steps.commit.outputs.message }}" | sed 's/[_*[\]()~`>#+\-=|{}.!]/\\&/g')
+          COMMIT_TIME=$(echo "${{ steps.commit.outputs.time }}" | sed 's/[_*[\]()~`>#+\-=|{}.!]/\\&/g')
+          TEXT="❌ *Drag Spend* build \`${GITHUB_REF_NAME}\` FAILED\.%0A%0A📝 *Commit:* ${COMMIT_MSG}%0A🕐 *Time:* ${COMMIT_TIME}%0A%0A🔗 [View run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})"
           curl -s -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
             -d chat_id="${TELEGRAM_CHAT_ID}" \
             -d parse_mode="MarkdownV2" \
