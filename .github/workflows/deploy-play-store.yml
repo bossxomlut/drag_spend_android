@@ -103,7 +103,7 @@ jobs:
           packageName: com.bossxomlut.dragspend
           releaseFiles: app/build/outputs/bundle/release/*.aab
           track: ${{ github.event.inputs.track || 'internal' }}
-          status: draft
+          status: completed
 
       # ── Telegram notification ────────────────────────────────────────────────
       - name: Notify Telegram – success
