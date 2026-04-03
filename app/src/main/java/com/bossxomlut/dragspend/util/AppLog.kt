@@ -21,6 +21,7 @@ object AppLog {
     private val isEnabled = BuildConfig.ENABLE_LOGGING
 
     enum class Feature(val tag: String) {
+        APP("DS:APP"),
         AUTH("DS:AUTH"),
         TRANSACTION("DS:TRANSACTION"),
         CARD("DS:CARD"),
