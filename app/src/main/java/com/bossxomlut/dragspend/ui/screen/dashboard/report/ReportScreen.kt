@@ -99,7 +99,6 @@ import org.koin.androidx.compose.koinViewModel
 @Composable
 fun ReportScreen(
     dashboardViewModel: DashboardViewModel,
-    isBalanceHidden: Boolean = false,
     onNavigateToDayDetail: (date: String) -> Unit = {},
     onNavigateToCategoryDetail: (yearMonth: String, categoryId: String, categoryName: String, categoryIcon: String) -> Unit = { _, _, _, _ -> },
     modifier: Modifier = Modifier,
@@ -184,12 +183,11 @@ fun ReportScreen(
             }
 
             // Stats — always rendered; values animate smoothly when month changes
-            StatCards(uiState = uiState, isBalanceHidden = isBalanceHidden)
+            StatCards(uiState = uiState)
 
             NetBalanceBanner(
                 totalIncome = uiState.totalIncome,
                 totalExpense = uiState.totalExpense,
-                isBalanceHidden = isBalanceHidden,
             )
 
             // Charts — shown when there is data, or while loading (old data stays visible)
@@ -391,7 +389,7 @@ private fun MonthNavigationHeader(
 }
 
 @Composable
-private fun StatCards(uiState: ReportUiState, isBalanceHidden: Boolean = false) {
+private fun StatCards(uiState: ReportUiState) {
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -403,7 +401,6 @@ private fun StatCards(uiState: ReportUiState, isBalanceHidden: Boolean = false) 
                 color = MaterialTheme.colorScheme.error,
                 containerColor = MaterialTheme.colorScheme.errorContainer,
                 icon = "💸",
-                isBalanceHidden = isBalanceHidden,
                 modifier = Modifier.weight(1f),
             )
             StatCard(
@@ -412,7 +409,6 @@ private fun StatCards(uiState: ReportUiState, isBalanceHidden: Boolean = false) 
                 color = MaterialTheme.colorScheme.tertiary,
                 containerColor = MaterialTheme.colorScheme.tertiaryContainer,
                 icon = "💰",
-                isBalanceHidden = isBalanceHidden,
                 modifier = Modifier.weight(1f),
             )
         }
@@ -426,7 +422,6 @@ private fun StatCards(uiState: ReportUiState, isBalanceHidden: Boolean = false) 
                 color = MaterialTheme.colorScheme.secondary,
                 containerColor = MaterialTheme.colorScheme.secondaryContainer,
                 icon = "📅",
-                isBalanceHidden = isBalanceHidden,
                 modifier = Modifier.weight(1f),
             )
             StatCard(
@@ -435,7 +430,6 @@ private fun StatCards(uiState: ReportUiState, isBalanceHidden: Boolean = false) 
                 color = MaterialTheme.colorScheme.primary,
                 containerColor = MaterialTheme.colorScheme.primaryContainer,
                 icon = "🔥",
-                isBalanceHidden = isBalanceHidden,
                 modifier = Modifier.weight(1f),
             )
         }
@@ -449,7 +443,6 @@ private fun StatCard(
     color: Color,
     containerColor: Color,
     icon: String,
-    isBalanceHidden: Boolean = false,
     modifier: Modifier = Modifier,
 ) {
     // Start at target value so navigation-back doesn't replay number animation from 0
@@ -490,7 +483,7 @@ private fun StatCard(
                     overflow = TextOverflow.Ellipsis,
                 )
                 Text(
-                    text = if (isBalanceHidden) "••••••" else CurrencyFormatter.formatCompact(animatedValue.value.toLong()),
+                    text = CurrencyFormatter.formatCompact(animatedValue.value.toLong()),
                     style = MaterialTheme.typography.titleSmall,
                     fontWeight = FontWeight.Bold,
                     color = color,
@@ -506,7 +499,6 @@ private fun StatCard(
 private fun NetBalanceBanner(
     totalIncome: Long,
     totalExpense: Long,
-    isBalanceHidden: Boolean = false,
 ) {
     val net = totalIncome - totalExpense
     val isPositive = net >= 0
@@ -553,7 +545,7 @@ private fun NetBalanceBanner(
                     color = contentColor.copy(alpha = 0.75f),
                 )
                 Text(
-                    text = if (isBalanceHidden) "••••••" else (if (animatedNet.value >= 0) "+" else "") + CurrencyFormatter.formatCompact(animatedNet.value.toLong()),
+                    text = (if (animatedNet.value >= 0) "+" else "") + CurrencyFormatter.formatCompact(animatedNet.value.toLong()),
                     style = MaterialTheme.typography.titleLarge,
                     fontWeight = FontWeight.Bold,
                     color = contentColor,

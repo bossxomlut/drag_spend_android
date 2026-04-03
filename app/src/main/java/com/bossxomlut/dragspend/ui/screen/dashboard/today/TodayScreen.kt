@@ -72,8 +72,6 @@ import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.GridView
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.MoreVert
-import androidx.compose.material.icons.filled.Visibility
-import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.BottomSheetScaffold
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -174,8 +172,6 @@ fun TodayScreen(
     dashboardViewModel: DashboardViewModel,
     onNavigateToSettings: () -> Unit,
     onNavigateToSearch: () -> Unit = {},
-    isBalanceHidden: Boolean = false,
-    onToggleBalanceVisibility: () -> Unit = {},
     modifier: Modifier = Modifier,
     todayViewModel: TodayViewModel = koinViewModel(),
 ) {
@@ -367,17 +363,6 @@ fun TodayScreen(
                                 )
                             }
                         }
-                        // Profile icon
-                        IconButton(onClick = onToggleBalanceVisibility) {
-                            Icon(
-                                imageVector = if (isBalanceHidden) Icons.Default.VisibilityOff else Icons.Default.Visibility,
-                                contentDescription = stringResource(
-                                    if (isBalanceHidden) R.string.label_balance_show else R.string.label_balance_hide,
-                                ),
-                                tint = if (isBalanceHidden) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.size(24.dp),
-                            )
-                        }
                         IconButton(onClick = onNavigateToSearch) {
                             Icon(
                                 imageVector = Icons.Default.Search,
@@ -459,7 +444,6 @@ fun TodayScreen(
                 isDragging = draggingCard != null,
                 isDragOver = isDragOverDropArea,
                 isLoading = uiState.isLoadingTransactions,
-                isBalanceHidden = isBalanceHidden,
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(sheetPadding)
@@ -633,7 +617,6 @@ private fun DayView(
     isDragging: Boolean = false,
     isDragOver: Boolean = false,
     isLoading: Boolean = false,
-    isBalanceHidden: Boolean = false,
     modifier: Modifier = Modifier,
 ) {
     val dateFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd")
@@ -756,7 +739,7 @@ private fun DayView(
                         )
                         Spacer(modifier = Modifier.width(4.dp))
                         Text(
-                            text = if (isBalanceHidden) "••••••" else "-${CurrencyFormatter.formatCompact(dayTotal.expense)}",
+                            text = "-${CurrencyFormatter.formatCompact(dayTotal.expense)}",
                             style = MaterialTheme.typography.labelMedium,
                             color = MaterialTheme.colorScheme.error,
                             fontWeight = FontWeight.Bold,
@@ -765,7 +748,7 @@ private fun DayView(
                 }
                 Spacer(modifier = Modifier.width(10.dp))
                 Text(
-                    text = if (isBalanceHidden) "••••••" else "-${dayTotal.expense}",
+                    text = "-${dayTotal.expense}",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.error,
                     fontWeight = FontWeight.SemiBold,
@@ -809,7 +792,6 @@ private fun DayView(
                     items(transactions, key = { it.id }) { transaction ->
                         TransactionItem(
                             transaction = transaction,
-                            isBalanceHidden = isBalanceHidden,
                             onEdit = { onEditTransaction(transaction) },
                             onDelete = { onDeleteTransaction(transaction) },
                             modifier = Modifier.animateItem(
@@ -1669,7 +1651,6 @@ private fun SpendingCardsPanel(
     @Composable
     private fun TransactionItem(
         transaction: Transaction,
-        isBalanceHidden: Boolean = false,
         onEdit: () -> Unit,
         onDelete: () -> Unit,
         modifier: Modifier = Modifier,
@@ -1733,7 +1714,7 @@ private fun SpendingCardsPanel(
 
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Text(
-                                text = if (isBalanceHidden) "••••••" else (if (isExpense) "-" else "+") +
+                                text = (if (isExpense) "-" else "+") +
                                         CurrencyFormatter.formatCompact(transaction.amount),
                                 style = MaterialTheme.typography.titleSmall,
                                 fontWeight = FontWeight.Bold,
