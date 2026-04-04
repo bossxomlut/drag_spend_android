@@ -114,6 +114,9 @@ dependencies {
     // Charts
     implementation(libs.vico.compose.m3)
 
+    // Baseline Profiles — pre-compiles critical startup code paths on install
+    implementation(libs.androidx.profileinstaller)
+
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
