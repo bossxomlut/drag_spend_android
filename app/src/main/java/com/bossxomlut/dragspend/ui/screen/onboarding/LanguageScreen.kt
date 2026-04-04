@@ -38,7 +38,7 @@ import com.bossxomlut.dragspend.ui.theme.DragSpendTheme
 
 @Composable
 fun LanguageScreen(
-    onOnboardingComplete: () -> Unit,
+    onOnboardingComplete: (language: String) -> Unit,
     viewModel: OnboardingViewModel = koinViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -46,7 +46,7 @@ fun LanguageScreen(
 
     LaunchedEffect(uiState) {
         when (val state = uiState) {
-            is OnboardingUiState.Done -> onOnboardingComplete()
+            is OnboardingUiState.Done -> onOnboardingComplete(state.language)
             is OnboardingUiState.Error -> toastMessage = state.message
             else -> Unit
         }

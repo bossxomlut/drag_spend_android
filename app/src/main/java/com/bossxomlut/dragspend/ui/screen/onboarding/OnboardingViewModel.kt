@@ -13,7 +13,7 @@ import kotlinx.coroutines.launch
 sealed interface OnboardingUiState {
     data object Idle : OnboardingUiState
     data object Loading : OnboardingUiState
-    data object Done : OnboardingUiState
+    data class Done(val language: String) : OnboardingUiState
     data class Error(val message: String) : OnboardingUiState
 }
 
@@ -30,7 +30,7 @@ class OnboardingViewModel(
         viewModelScope.launch {
             _uiState.value = OnboardingUiState.Loading
             ensureUserSeededUseCase(name = null, language = language)
-                .onSuccess { _uiState.value = OnboardingUiState.Done }
+                .onSuccess { _uiState.value = OnboardingUiState.Done(language) }
                 .onFailure { e -> _uiState.value = OnboardingUiState.Error(e.toFriendlyMessage()) }
         }
     }

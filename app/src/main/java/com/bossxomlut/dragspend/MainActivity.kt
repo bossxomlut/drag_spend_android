@@ -5,6 +5,7 @@ import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.os.Build
 import android.os.Bundle
+import android.os.SystemClock
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -36,10 +37,12 @@ class MainActivity : ComponentActivity() {
     private val appPreferences: AppPreferences by inject()
 
     private val isAppReady = mutableStateOf(false)
+    private val activityStartTime = SystemClock.elapsedRealtime()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         val splashScreen = installSplashScreen()
         super.onCreate(savedInstanceState)
+        AppLog.d(AppLog.Feature.PERF, "MainActivity.onCreate", "started")
 
         applySecureFlag("onCreate")
 
@@ -75,7 +78,11 @@ class MainActivity : ComponentActivity() {
                     AppNavGraph(
                         navController = navController,
                         supabase = supabase,
-                        onReady = { isAppReady.value = true },
+                        onReady = {
+                            val elapsed = SystemClock.elapsedRealtime() - activityStartTime
+                            AppLog.success(AppLog.Feature.PERF, "splash_dismissed", "${elapsed}ms since Activity start")
+                            isAppReady.value = true
+                        },
                     )
                 }
             }

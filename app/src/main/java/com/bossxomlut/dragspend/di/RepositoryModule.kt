@@ -10,10 +10,13 @@ import com.bossxomlut.dragspend.domain.repository.CategoryRepository
 import com.bossxomlut.dragspend.domain.repository.ProfileRepository
 import com.bossxomlut.dragspend.domain.repository.SessionRepository
 import com.bossxomlut.dragspend.domain.repository.TransactionRepository
+import com.bossxomlut.dragspend.util.ProfileCache
+import org.koin.android.ext.koin.androidContext
 import org.koin.dsl.module
 
 val repositoryModule = module {
-    single<SessionRepository> { SessionRepositoryImpl(get()) }
+    single { ProfileCache(androidContext()) }
+    single<SessionRepository> { SessionRepositoryImpl(get(), get()) }
     single<ProfileRepository> { ProfileRepositoryImpl(get()) }
     single<CategoryRepository> { CategoryRepositoryImpl(get()) }
     single<CardRepository> { CardRepositoryImpl(get()) }

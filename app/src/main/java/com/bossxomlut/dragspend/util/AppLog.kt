@@ -31,6 +31,7 @@ object AppLog {
         REPORT("DS:REPORT"),
         SETTINGS("DS:SETTINGS"),
         ONBOARDING("DS:ONBOARDING"),
+        PERF("DS:PERF"),
     }
 
     /** General info / action start. */
