@@ -3,13 +3,11 @@
 # Covers the critical startup path:
 #   Process spawn → Application.onCreate → MainActivity → AppNavGraph → DashboardScreen
 #
-# Format: HSPLcom/package/ClassName;->method(Largs;)Lreturn;
-#   H = Hot (called many times)
-#   S = Startup (called during startup)
-#   P = Post-Startup (called shortly after first frame)
-#   L = class included in profile for layout (class-level)
+# Format:
+#   HSPLcom/package/ClassName;->method(Largs;)Lreturn;   ← specific method, pre-compiled
+#   Lcom/package/ClassName;                               ← class included (all fields loaded)
 #
-# Wildcards (**) match all methods in the class.
+# Flags: H=Hot  S=Startup  P=PostStartup  L=Layout/class-level
 
 # ── Application + Activity ───────────────────────────────────────────────────
 HSPLcom/bossxomlut/dragspend/DragSpendApp;-><init>()V
@@ -27,23 +25,16 @@ HSPLcom/bossxomlut/dragspend/navigation/AppNavGraphKt;->AppNavGraph(Landroidx/na
 
 # ── Theme ─────────────────────────────────────────────────────────────────────
 HSPLcom/bossxomlut/dragspend/ui/theme/ThemeKt;->DragSpendTheme(ZZLkotlin/jvm/functions/Function2;Landroidx/compose/runtime/Composer;II)V
-HSPLcom/bossxomlut/dragspend/ui/theme/ColorKt;->**
-HSPLcom/bossxomlut/dragspend/ui/theme/TypeKt;->**
+Lcom/bossxomlut/dragspend/ui/theme/ColorKt;
+Lcom/bossxomlut/dragspend/ui/theme/TypeKt;
 
 # ── Dashboard (first screen for logged-in users) ─────────────────────────────
 HSPLcom/bossxomlut/dragspend/ui/screen/dashboard/DashboardScreenKt;->DashboardScreen(Lkotlin/jvm/functions/Function0;Lkotlin/jvm/functions/Function0;Lkotlin/jvm/functions/Function0;Landroidx/compose/runtime/Composer;I)V
-HSPLcom/bossxomlut/dragspend/ui/screen/dashboard/DashboardViewModel;-><init>(Lcom/bossxomlut/dragspend/domain/usecase/category/GetCategoriesUseCase;Lcom/bossxomlut/dragspend/domain/usecase/card/GetCardsUseCase;Lcom/bossxomlut/dragspend/util/AppPreferences;)V
-HSPLcom/bossxomlut/dragspend/ui/screen/dashboard/today/TodayViewModel;-><init>(***)V
+Lcom/bossxomlut/dragspend/ui/screen/dashboard/DashboardViewModel;
+Lcom/bossxomlut/dragspend/ui/screen/dashboard/today/TodayViewModel;
 
 # ── Startup I/O (SharedPrefs read on every cold start) ───────────────────────
 HSPLcom/bossxomlut/dragspend/util/ProfileCache;-><init>(Landroid/content/Context;)V
 HSPLcom/bossxomlut/dragspend/util/ProfileCache;->getLanguage(Ljava/lang/String;)Ljava/lang/String;
-HSPLcom/bossxomlut/dragspend/util/SharedPreferencesSessionManager;-><init>(Landroid/content/Context;)V
-HSPLcom/bossxomlut/dragspend/util/AppPreferences;-><init>(Landroid/content/Context;)V
-
-# ── Compose runtime (internals called on every recomposition) ─────────────────
-HSPLandroidx/compose/runtime/ComposerImpl;->**
-HSPLandroidx/compose/runtime/RecomposerKt;->**
-HSPLandroidx/compose/ui/platform/AndroidComposeView;->**
-HSPLandroidx/compose/material3/MaterialThemeKt;->**
-HSPLandroidx/navigation/compose/NavHostKt;->**
+Lcom/bossxomlut/dragspend/util/SharedPreferencesSessionManager;
+Lcom/bossxomlut/dragspend/util/AppPreferences;
