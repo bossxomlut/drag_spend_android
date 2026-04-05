@@ -8,6 +8,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
+import androidx.lifecycle.Lifecycle
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -266,18 +267,26 @@ fun AppNavGraph(
                         }
                     },
                     onNavigateToSettings = {
-                        navController.navigate(Route.Settings.route)
+                        if (navController.currentBackStackEntry?.lifecycle?.currentState == Lifecycle.State.RESUMED) {
+                            navController.navigate(Route.Settings.route)
+                        }
                     },
                     onNavigateToDayDetail = { date ->
-                        navController.navigate(Route.DayDetail.createRoute(date))
+                        if (navController.currentBackStackEntry?.lifecycle?.currentState == Lifecycle.State.RESUMED) {
+                            navController.navigate(Route.DayDetail.createRoute(date))
+                        }
                     },
                     onNavigateToCategoryDetail = { yearMonth, categoryId, categoryName, categoryIcon ->
-                        navController.navigate(
-                            Route.CategoryDetail.createRoute(yearMonth, categoryId, categoryName, categoryIcon),
-                        )
+                        if (navController.currentBackStackEntry?.lifecycle?.currentState == Lifecycle.State.RESUMED) {
+                            navController.navigate(
+                                Route.CategoryDetail.createRoute(yearMonth, categoryId, categoryName, categoryIcon),
+                            )
+                        }
                     },
                     onNavigateToSearch = {
-                        navController.navigate(Route.Search.route)
+                        if (navController.currentBackStackEntry?.lifecycle?.currentState == Lifecycle.State.RESUMED) {
+                            navController.navigate(Route.Search.route)
+                        }
                     },
                 )
             }
