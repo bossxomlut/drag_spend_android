@@ -34,6 +34,10 @@ sealed interface AuthUiState {
 }
 
 
+/** Email for Google Play review — OTP is bypassed client-side, no server request is made. */
+private const val TEST_ACCOUNT_EMAIL = "bossxomlut@gmail.com"
+private const val TEST_ACCOUNT_OTP = "999999"
+
 class AuthViewModel(
     private val supabase: SupabaseClient,
     private val sessionRepository: SessionRepository,
@@ -42,6 +46,12 @@ class AuthViewModel(
 
     private val _uiState = MutableStateFlow<AuthUiState>(AuthUiState.Idle)
     val uiState: StateFlow<AuthUiState> = _uiState.asStateFlow()
+
+    /**
+     * True when the OTP was bypassed for the test account.
+     * Allows [updatePassword] to also skip the server call (no real session exists).
+     */
+    private var isTestAccountSession = false
 
     fun login(email: String, password: String) {
         AppLog.d(AppLog.Feature.AUTH, "login", "email=$email")
@@ -135,9 +145,17 @@ class AuthViewModel(
     /**
      * Send OTP to email for password reset flow.
      * Uses signInWithOTP which sends a 6-digit code to the user's email.
+     *
+     * For the Google Play test account the OTP request is skipped entirely —
+     * no server call is made and the fixed code [TEST_ACCOUNT_OTP] is accepted.
      */
     fun sendOTP(email: String) {
         AppLog.d(AppLog.Feature.AUTH, "sendOTP", "email=$email")
+        if (email.trim().lowercase() == TEST_ACCOUNT_EMAIL) {
+            AppLog.d(AppLog.Feature.AUTH, "sendOTP", "test account — skipping server request")
+            _uiState.value = AuthUiState.OTPSent
+            return
+        }
         viewModelScope.launch {
             _uiState.value = AuthUiState.Loading
             runCatching {
@@ -158,9 +176,18 @@ class AuthViewModel(
     /**
      * Verify OTP code entered by user.
      * If successful, creates a session that allows password update.
+     *
+     * For the Google Play test account any verification is skipped when the
+     * user enters [TEST_ACCOUNT_OTP] — no server call is made.
      */
     fun verifyOTP(email: String, token: String) {
         AppLog.d(AppLog.Feature.AUTH, "verifyOTP", "email=$email")
+        if (email.trim().lowercase() == TEST_ACCOUNT_EMAIL && token == TEST_ACCOUNT_OTP) {
+            AppLog.d(AppLog.Feature.AUTH, "verifyOTP", "test account — bypassing OTP verification")
+            isTestAccountSession = true
+            _uiState.value = AuthUiState.OTPVerified
+            return
+        }
         viewModelScope.launch {
             _uiState.value = AuthUiState.Loading
             runCatching {
@@ -182,9 +209,18 @@ class AuthViewModel(
     /**
      * Update the user's password after OTP verification.
      * Requires an active session from verifyOTP.
+     *
+     * For the Google Play test account (where no real Supabase session exists after
+     * the bypassed [verifyOTP]) the update is simulated locally.
      */
     fun updatePassword(newPassword: String) {
         AppLog.d(AppLog.Feature.AUTH, "updatePassword", "updating password")
+        if (isTestAccountSession) {
+            AppLog.d(AppLog.Feature.AUTH, "updatePassword", "test account — simulating password reset success")
+            isTestAccountSession = false
+            _uiState.value = AuthUiState.PasswordResetSuccess
+            return
+        }
         viewModelScope.launch {
             _uiState.value = AuthUiState.Loading
             runCatching {
