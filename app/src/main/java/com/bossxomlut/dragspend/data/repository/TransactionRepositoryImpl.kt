@@ -62,7 +62,7 @@ class TransactionRepositoryImpl(
                 order("position", order = Order.ASCENDING)
             }
             .decodeList<TransactionDto>()
-            .map { it.toDomain() }
+            .let { attachCategories(it) }
     }.logResult(AppLog.Feature.TRANSACTION, "getMonthlyTransactions") { "${it.size} items" }
         .mapToAppError()
 
