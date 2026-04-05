@@ -44,8 +44,8 @@ fun CardVariantDto.toDomain(): CardVariant = CardVariant(
     cardId = cardId,
     label = label,
     amount = amount,
-    isDefault = isDefault,
-    position = position,
+    isDefault = isDefault ?: false,
+    position = position ?: 0,
     createdAt = createdAt,
 )
 
@@ -59,7 +59,7 @@ fun SpendingCardDto.toDomain(
     categoryId = categoryId,
     type = type.toDomain(),
     note = note,
-    position = position,
+    position = position ?: 0,
     useCount = useCount,
     language = language,
     createdAt = createdAt,
@@ -78,7 +78,7 @@ fun TransactionDto.toDomain(category: Category? = null): Transaction = Transacti
     categoryId = categoryId,
     type = type.toDomain(),
     note = note,
-    position = position,
+    position = position ?: 0,
     createdAt = createdAt,
     updatedAt = updatedAt,
     category = category,

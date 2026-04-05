@@ -9,8 +9,8 @@ data class CardVariantDto(
     @SerialName("card_id") val cardId: String,
     val label: String? = null,
     val amount: Long,
-    @SerialName("is_default") val isDefault: Boolean = false,
-    val position: Int = 0,
+    @SerialName("is_default") val isDefault: Boolean? = null,
+    val position: Int? = null,
     @SerialName("created_at") val createdAt: String? = null,
 )
 
@@ -22,7 +22,7 @@ data class SpendingCardDto(
     @SerialName("category_id") val categoryId: String? = null,
     val type: TransactionTypeDto,
     val note: String? = null,
-    val position: Int = 0,
+    val position: Int? = null,
     @SerialName("use_count") val useCount: Int = 0,
     val language: String = "vi",
     @SerialName("created_at") val createdAt: String? = null,

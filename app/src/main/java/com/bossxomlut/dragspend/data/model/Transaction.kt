@@ -14,7 +14,7 @@ data class TransactionDto(
     @SerialName("category_id") val categoryId: String? = null,
     val type: TransactionTypeDto,
     val note: String? = null,
-    val position: Int = 0,
+    val position: Int? = null,
     @SerialName("created_at") val createdAt: String? = null,
     @SerialName("updated_at") val updatedAt: String? = null,
 )
