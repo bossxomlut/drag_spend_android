@@ -157,6 +157,15 @@
     <string name="settings_delete_confirm_message">This action is irreversible. All your data will be permanently deleted.</string>
     <string name="settings_edit_name_title">Edit display name</string>
     <string name="settings_edit_name_hint">Your name</string>
+
+    <!-- Backup -->
+    <string name="settings_section_backup">Cloud Backup</string>
+    <string name="settings_backup_now">Back up data to cloud</string>
+    <string name="settings_backup_action">Back up</string>
+    <string name="settings_restore_from_cloud">Restore data from cloud</string>
+    <string name="settings_restore_action">Restore</string>
+    <string name="settings_backup_sign_in_hint">Sign in to back up your data to the cloud and restore it on any device.</string>
+    <string name="settings_backup_sign_in_action">Sign in to enable backup</string>
     <string name="notification_reminder_channel_name">Daily reminder</string>
     <string name="notification_reminder_channel_desc">Daily spending entry reminder</string>
     <string name="notification_reminder_title">Time to log your spending 💸</string>

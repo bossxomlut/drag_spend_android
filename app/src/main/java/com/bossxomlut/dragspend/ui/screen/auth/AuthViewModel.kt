@@ -3,6 +3,7 @@ package com.bossxomlut.dragspend.ui.screen.auth
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.bossxomlut.dragspend.domain.repository.SessionRepository
+import com.bossxomlut.dragspend.domain.usecase.backup.BackupDataUseCase
 import com.bossxomlut.dragspend.domain.usecase.profile.GetProfileUseCase
 import com.bossxomlut.dragspend.util.AppLog
 import com.bossxomlut.dragspend.util.toFriendlyMessage
@@ -38,6 +39,7 @@ class AuthViewModel(
     private val supabase: SupabaseClient,
     private val sessionRepository: SessionRepository,
     private val getProfileUseCase: GetProfileUseCase,
+    private val backupDataUseCase: BackupDataUseCase,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow<AuthUiState>(AuthUiState.Idle)
@@ -54,14 +56,18 @@ class AuthViewModel(
                 }
             }.onSuccess {
                 AppLog.success(AppLog.Feature.AUTH, "login")
-                if (!sessionRepository.isAuthenticated()) {
-                    _uiState.value = AuthUiState.LoginSuccess(needsOnboarding = false)
-                    return@onSuccess
-                }
+                // Migrate guest Room data to Supabase userId before navigating
+                backupDataUseCase.migrateRoomOnLogin()
                 val profile = getProfileUseCase().getOrNull()
                 val needsOnboarding = profile?.language == null
                 AppLog.d(AppLog.Feature.AUTH, "login", "needsOnboarding=$needsOnboarding")
                 _uiState.value = AuthUiState.LoginSuccess(needsOnboarding = needsOnboarding)
+                // Push to cloud in background (fire-and-forget)
+                viewModelScope.launch {
+                    backupDataUseCase.backupToCloud()
+                        .onSuccess { result -> AppLog.success(AppLog.Feature.AUTH, "login.backup", "${result.categories}c ${result.cards}cards ${result.transactions}tx") }
+                        .onFailure { e -> AppLog.error(AppLog.Feature.AUTH, "login.backup", e, "non-critical") }
+                }
             }.onFailure { e ->
                 AppLog.error(AppLog.Feature.AUTH, "login", e)
                 val raw = e.message?.lowercase() ?: ""

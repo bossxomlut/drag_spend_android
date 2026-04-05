@@ -290,6 +290,9 @@ fun AppNavGraph(
             composable(Route.Settings.route) {
                 SettingsScreen(
                     onDone = { navController.popBackStack() },
+                    onNavigateToLogin = {
+                        navController.navigate(Route.Login.route)
+                    },
                     onSignOut = {
                         profileCache.clear()
                         // Sign out → về Dashboard dạng guest

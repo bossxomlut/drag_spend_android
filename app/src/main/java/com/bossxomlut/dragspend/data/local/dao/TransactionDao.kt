@@ -9,6 +9,10 @@ import com.bossxomlut.dragspend.data.local.entity.TransactionEntity
 @Dao
 interface TransactionDao {
 
+    /** Returns ALL transactions for a user including soft-deleted — used for userId migration. */
+    @Query("SELECT * FROM transactions WHERE user_id = :userId")
+    suspend fun getAll(userId: String): List<TransactionEntity>
+
     @Query(
         """
         SELECT * FROM transactions

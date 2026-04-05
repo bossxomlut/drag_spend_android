@@ -7,6 +7,7 @@ import com.bossxomlut.dragspend.domain.usecase.card.IncrementCardUseCountUseCase
 import com.bossxomlut.dragspend.domain.usecase.card.UpdateCardUseCase
 import com.bossxomlut.dragspend.domain.usecase.category.CreateCategoryUseCase
 import com.bossxomlut.dragspend.domain.usecase.category.GetCategoriesUseCase
+import com.bossxomlut.dragspend.domain.usecase.backup.BackupDataUseCase
 import com.bossxomlut.dragspend.domain.usecase.profile.DeleteAccountUseCase
 import com.bossxomlut.dragspend.domain.usecase.profile.EnsureUserSeededUseCase
 import com.bossxomlut.dragspend.domain.usecase.profile.GetProfileUseCase
@@ -59,6 +60,9 @@ val viewModelModule = module {
     single { DeleteCardUseCase(get()) }
     single { IncrementCardUseCountUseCase(get()) }
 
+    // Use cases — backup
+    single { BackupDataUseCase(get(), get(), get(), get()) }
+
     // Use cases — profile
     single { GetProfileUseCase(get(), get(), get()) }
     single { EnsureUserSeededUseCase(get(), get(), get()) }
@@ -67,7 +71,7 @@ val viewModelModule = module {
     single { DeleteAccountUseCase(get(), get()) }
 
     // ViewModels
-    viewModel { AuthViewModel(get(), get(), get()) }
+    viewModel { AuthViewModel(get(), get(), get(), get()) }
     viewModel { OnboardingViewModel(get()) }
     viewModel { DashboardViewModel(get(), get(), get()) }
     viewModel {
@@ -79,6 +83,6 @@ val viewModelModule = module {
     viewModel { DayDetailViewModel(get(), get(), get(), get()) }
     viewModel { CategoryDetailViewModel(get()) }
     viewModel { ReportViewModel(get()) }
-    viewModel { SettingsViewModel(androidApplication(), get(), get(), get(), get(), get(), get()) }
+    viewModel { SettingsViewModel(androidApplication(), get(), get(), get(), get(), get(), get(), get()) }
     viewModel { SearchViewModel(get(), get()) }
 }

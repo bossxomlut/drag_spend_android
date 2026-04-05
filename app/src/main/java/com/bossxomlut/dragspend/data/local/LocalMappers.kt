@@ -44,6 +44,7 @@ fun Category.toEntity(syncedAt: String? = null): CategoryEntity = CategoryEntity
     type = type.name.lowercase(),
     language = language,
     createdAt = createdAt,
+    updatedAt = createdAt, // categories are not edited; updatedAt mirrors createdAt
     syncedAt = syncedAt,
     deletedAt = null,
 )
@@ -102,6 +103,7 @@ fun CategoryEntity.toDomain(): Category = Category(
     type = if (type == "income") TransactionType.INCOME else TransactionType.EXPENSE,
     language = language,
     createdAt = createdAt,
+    updatedAt = updatedAt,
 )
 
 fun CardVariantEntity.toDomain(): CardVariant = CardVariant(
@@ -171,6 +173,7 @@ fun CategoryDto.toEntity(syncedAt: String? = null): CategoryEntity = CategoryEnt
     type = type.name.lowercase(),
     language = language,
     createdAt = createdAt,
+    updatedAt = updatedAt ?: createdAt,
     syncedAt = syncedAt,
     deletedAt = null,
 )

@@ -9,4 +9,5 @@ data class Category(
     val type: TransactionType,
     val language: String = "",
     val createdAt: String? = null,
+    val updatedAt: String? = null,
 )

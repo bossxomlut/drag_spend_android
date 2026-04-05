@@ -18,6 +18,7 @@ data class CategoryEntity(
     val type: String,
     val language: String,
     @ColumnInfo(name = "created_at") val createdAt: String?,
+    @ColumnInfo(name = "updated_at") val updatedAt: String?,
     @ColumnInfo(name = "synced_at") val syncedAt: String?,
     @ColumnInfo(name = "deleted_at") val deletedAt: String?,
 )

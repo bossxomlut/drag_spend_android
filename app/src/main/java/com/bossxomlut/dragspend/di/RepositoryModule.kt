@@ -2,6 +2,7 @@ package com.bossxomlut.dragspend.di
 
 import androidx.room.Room
 import com.bossxomlut.dragspend.data.local.AppDatabase
+import com.bossxomlut.dragspend.data.local.BackupManager
 import com.bossxomlut.dragspend.data.local.LocalSeeder
 import com.bossxomlut.dragspend.data.local.SyncManager
 import com.bossxomlut.dragspend.data.repository.CardRepositoryImpl
@@ -26,7 +27,7 @@ val repositoryModule = module {
             androidContext(),
             AppDatabase::class.java,
             "drag_spend_db",
-        ).build()
+        ).addMigrations(AppDatabase.MIGRATION_1_2).build()
     }
     single { get<AppDatabase>().transactionDao() }
     single { get<AppDatabase>().categoryDao() }
@@ -39,6 +40,7 @@ val repositoryModule = module {
 
     // ── Sync ─────────────────────────────────────────────────────────────────
     single { SyncManager(get(), get(), get(), get(), get()) }
+    single { BackupManager(get(), get(), get(), get(), get()) }
     single { LocalSeeder(get(), get(), get()) }
 
     // ── Repositories ─────────────────────────────────────────────────────────

@@ -13,4 +13,5 @@ data class CategoryDto(
     val type: TransactionTypeDto,
     val language: String = "vi",
     @SerialName("created_at") val createdAt: String? = null,
+    @SerialName("updated_at") val updatedAt: String? = null,
 )

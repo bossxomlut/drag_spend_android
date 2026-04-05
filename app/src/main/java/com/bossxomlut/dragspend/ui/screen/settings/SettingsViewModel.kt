@@ -4,6 +4,7 @@ import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.bossxomlut.dragspend.domain.repository.SessionRepository
+import com.bossxomlut.dragspend.domain.usecase.backup.BackupDataUseCase
 import com.bossxomlut.dragspend.domain.usecase.profile.DeleteAccountUseCase
 import com.bossxomlut.dragspend.domain.usecase.profile.GetProfileUseCase
 import com.bossxomlut.dragspend.domain.usecase.profile.UpdateProfileLanguageUseCase
@@ -29,6 +30,11 @@ data class SettingsUiState(
     val error: String? = null,
     val signedOut: Boolean = false,
     val accountDeleted: Boolean = false,
+    val isAuthenticated: Boolean = false,
+    val isBackingUp: Boolean = false,
+    val backupSuccess: Boolean = false,
+    val isRestoring: Boolean = false,
+    val restoreSuccess: Boolean = false,
 )
 
 class SettingsViewModel(
@@ -39,6 +45,7 @@ class SettingsViewModel(
     private val updateProfileLanguageUseCase: UpdateProfileLanguageUseCase,
     private val deleteAccountUseCase: DeleteAccountUseCase,
     private val appPreferences: AppPreferences,
+    private val backupDataUseCase: BackupDataUseCase,
 ) : AndroidViewModel(application) {
 
     private val _uiState = MutableStateFlow(SettingsUiState())
@@ -62,7 +69,13 @@ class SettingsViewModel(
 
     private fun loadProfile() {
         AppLog.d(AppLog.Feature.SETTINGS, "loadProfile")
-        _uiState.update { it.copy(email = sessionRepository.getCurrentUserEmail() ?: "", isLoading = true) }
+        _uiState.update {
+            it.copy(
+                email = sessionRepository.getCurrentUserEmail() ?: "",
+                isLoading = true,
+                isAuthenticated = sessionRepository.isAuthenticated(),
+            )
+        }
         viewModelScope.launch {
             getProfileUseCase()
                 .onSuccess { profile ->
@@ -126,6 +139,9 @@ class SettingsViewModel(
     fun signOut() {
         AppLog.d(AppLog.Feature.AUTH, "signOut")
         viewModelScope.launch {
+            // Migrate Room data supabaseId → guestId BEFORE sign-out so data is
+            // still visible in guest mode after logout.
+            backupDataUseCase.migrateRoomOnSignOut()
             sessionRepository.signOut()
                 .onSuccess {
                     AppLog.success(AppLog.Feature.AUTH, "signOut")
@@ -152,5 +168,41 @@ class SettingsViewModel(
 
     fun clearError() {
         _uiState.update { it.copy(error = null) }
+    }
+
+    fun backupNow() {
+        AppLog.d(AppLog.Feature.SETTINGS, "backupNow")
+        viewModelScope.launch {
+            _uiState.update { it.copy(isBackingUp = true, backupSuccess = false, error = null) }
+            backupDataUseCase.backupToCloud()
+                .onSuccess { result ->
+                    AppLog.success(AppLog.Feature.SETTINGS, "backupNow", "${result.categories}c ${result.cards}cards ${result.transactions}tx")
+                    _uiState.update { it.copy(isBackingUp = false, backupSuccess = true) }
+                }
+                .onFailure { e ->
+                    AppLog.error(AppLog.Feature.SETTINGS, "backupNow", e)
+                    _uiState.update { it.copy(isBackingUp = false, error = e.toFriendlyMessage()) }
+                }
+        }
+    }
+
+    fun restoreFromCloud() {
+        AppLog.d(AppLog.Feature.SETTINGS, "restoreFromCloud")
+        viewModelScope.launch {
+            _uiState.update { it.copy(isRestoring = true, restoreSuccess = false, error = null) }
+            backupDataUseCase.restoreFromCloud()
+                .onSuccess {
+                    AppLog.success(AppLog.Feature.SETTINGS, "restoreFromCloud")
+                    _uiState.update { it.copy(isRestoring = false, restoreSuccess = true) }
+                }
+                .onFailure { e ->
+                    AppLog.error(AppLog.Feature.SETTINGS, "restoreFromCloud", e)
+                    _uiState.update { it.copy(isRestoring = false, error = e.toFriendlyMessage()) }
+                }
+        }
+    }
+
+    fun clearBackupSuccess() {
+        _uiState.update { it.copy(backupSuccess = false, restoreSuccess = false) }
     }
 }

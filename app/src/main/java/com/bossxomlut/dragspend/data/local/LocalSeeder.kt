@@ -156,6 +156,7 @@ class LocalSeeder(
         type = type,
         language = language,
         createdAt = createdAt,
+        updatedAt = createdAt,
         syncedAt = null,
         deletedAt = null,
     )

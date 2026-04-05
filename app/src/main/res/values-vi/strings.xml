@@ -157,6 +157,15 @@
     <string name="settings_delete_confirm_message">Hành động này không thể hoàn tác. Toàn bộ dữ liệu của bạn sẽ bị xóa vĩnh viễn.</string>
     <string name="settings_edit_name_title">Chỉnh sửa tên hiển thị</string>
     <string name="settings_edit_name_hint">Tên của bạn</string>
+
+    <!-- Backup -->
+    <string name="settings_section_backup">Sao lưu đám mây</string>
+    <string name="settings_backup_now">Sao lưu dữ liệu lên đám mây</string>
+    <string name="settings_backup_action">Sao lưu</string>
+    <string name="settings_restore_from_cloud">Khôi phục dữ liệu từ đám mây</string>
+    <string name="settings_restore_action">Khôi phục</string>
+    <string name="settings_backup_sign_in_hint">Đăng nhập để sao lưu dữ liệu lên đám mây và khôi phục trên mọi thiết bị.</string>
+    <string name="settings_backup_sign_in_action">Đăng nhập để bật sao lưu</string>
     <string name="notification_reminder_channel_name">Nhắc nhở hàng ngày</string>
     <string name="notification_reminder_channel_desc">Nhắc nhở nhập chi tiêu hàng ngày</string>
     <string name="notification_reminder_title">Đến giờ ghi chi tiêu rồi 💸</string>

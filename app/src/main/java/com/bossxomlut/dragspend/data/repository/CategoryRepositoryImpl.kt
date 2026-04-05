@@ -47,7 +47,7 @@ class CategoryRepositoryImpl(
             val entity = CategoryEntity(
                 id = localId, userId = userId, name = name, icon = icon,
                 color = color, type = type.name.lowercase(), language = language,
-                createdAt = now, syncedAt = null, deletedAt = null,
+                createdAt = now, updatedAt = now, syncedAt = null, deletedAt = null,
             )
             categoryDao.upsert(entity)
             return@runCatching entity.toDomain()
@@ -75,10 +75,12 @@ class CategoryRepositoryImpl(
         AppLog.d(AppLog.Feature.CATEGORY, "updateCategory", "id=${category.id}, name=${category.name}")
 
         if (!sessionRepository.isAuthenticated()) {
+            val now = Instant.now().toString()
             val existing = categoryDao.getById(category.id)
             val entity = existing?.copy(
                 name = category.name, icon = category.icon,
                 color = category.color, type = category.type.name.lowercase(),
+                updatedAt = now,
             ) ?: category.toEntity()
             categoryDao.upsert(entity)
             return@runCatching category
