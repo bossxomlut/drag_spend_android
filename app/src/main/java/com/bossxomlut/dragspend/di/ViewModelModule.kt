@@ -60,8 +60,8 @@ val viewModelModule = module {
     single { IncrementCardUseCountUseCase(get()) }
 
     // Use cases — profile
-    single { GetProfileUseCase(get(), get()) }
-    single { EnsureUserSeededUseCase(get(), get()) }
+    single { GetProfileUseCase(get(), get(), get()) }
+    single { EnsureUserSeededUseCase(get(), get(), get()) }
     single { UpdateProfileNameUseCase(get(), get()) }
     single { UpdateProfileLanguageUseCase(get(), get()) }
     single { DeleteAccountUseCase(get(), get()) }

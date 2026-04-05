@@ -44,6 +44,7 @@ private data class DashboardTab(
 
 @Composable
 fun DashboardScreen(
+    language: String,
     onSignOut: () -> Unit,
     onNavigateToSettings: () -> Unit,
     onNavigateToDayDetail: (date: String) -> Unit = {},
@@ -123,6 +124,7 @@ fun DashboardScreen(
         when (selectedTab) {
             0 -> TodayScreen(
                 dashboardViewModel = dashboardViewModel,
+                language = language,
                 onNavigateToSettings = onNavigateToSettings,
                 onNavigateToSearch = onNavigateToSearch,
                 modifier = Modifier

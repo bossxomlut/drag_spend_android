@@ -1,98 +1,96 @@
 package com.bossxomlut.dragspend.data.repository
 
-import com.bossxomlut.dragspend.data.model.MonthlyReportRowDto
+import com.bossxomlut.dragspend.data.local.dao.CategoryDao
+import com.bossxomlut.dragspend.data.local.dao.TransactionDao
+import com.bossxomlut.dragspend.data.local.entity.TransactionEntity
+import com.bossxomlut.dragspend.data.local.toDomain
+import com.bossxomlut.dragspend.data.local.toEntity
 import com.bossxomlut.dragspend.data.model.TransactionDto
 import com.bossxomlut.dragspend.data.model.toDomain
 import com.bossxomlut.dragspend.domain.error.mapToAppError
+import com.bossxomlut.dragspend.domain.model.Category
 import com.bossxomlut.dragspend.domain.model.ReportEntry
 import com.bossxomlut.dragspend.domain.model.Transaction
 import com.bossxomlut.dragspend.domain.repository.CategoryRepository
 import com.bossxomlut.dragspend.domain.repository.CreateTransactionRequest
+import com.bossxomlut.dragspend.domain.repository.SessionRepository
 import com.bossxomlut.dragspend.domain.repository.TransactionRepository
 import com.bossxomlut.dragspend.domain.repository.UpdateTransactionRequest
 import com.bossxomlut.dragspend.util.AppLog
 import com.bossxomlut.dragspend.util.logResult
 import io.github.jan.supabase.SupabaseClient
 import io.github.jan.supabase.postgrest.from
-import io.github.jan.supabase.postgrest.postgrest
-import io.github.jan.supabase.postgrest.query.Order
-import io.github.jan.supabase.postgrest.rpc
+import java.time.Instant
+import java.util.UUID
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 
 class TransactionRepositoryImpl(
     private val supabase: SupabaseClient,
     private val categoryRepository: CategoryRepository,
+    private val transactionDao: TransactionDao,
+    private val categoryDao: CategoryDao,
+    private val sessionRepository: SessionRepository,
 ) : TransactionRepository {
 
     override suspend fun getTransactions(userId: String, date: String): Result<List<Transaction>> = runCatching {
         AppLog.d(AppLog.Feature.TRANSACTION, "getTransactions", "userId=${userId.take(8)}, date=$date")
-        val txns = supabase.from("transactions")
-            .select {
-                filter {
-                    eq("user_id", userId)
-                    eq("date", date)
-                }
-                order("position", order = Order.ASCENDING)
-            }
-            .decodeList<TransactionDto>()
-        attachCategories(txns)
+        attachCategoriesLocal(transactionDao.getByDate(userId, date), userId)
     }.logResult(AppLog.Feature.TRANSACTION, "getTransactions") { "${it.size} items" }
         .mapToAppError()
 
     override suspend fun getMonthlyTransactions(userId: String, yearMonth: String): Result<List<Transaction>> = runCatching {
         AppLog.d(AppLog.Feature.TRANSACTION, "getMonthlyTransactions", "userId=${userId.take(8)}, yearMonth=$yearMonth")
-        val startDate = "$yearMonth-01"
-        val nextMonth = if (yearMonth.endsWith("12")) {
-            "${yearMonth.take(4).toInt() + 1}-01"
-        } else {
-            val parts = yearMonth.split("-")
-            "${parts[0]}-${(parts[1].toInt() + 1).toString().padStart(2, '0')}"
-        }
-        val endDate = "$nextMonth-01"
-
-        supabase.from("transactions")
-            .select {
-                filter {
-                    eq("user_id", userId)
-                    gte("date", startDate)
-                    lt("date", endDate)
-                }
-                order("date", order = Order.ASCENDING)
-                order("position", order = Order.ASCENDING)
-            }
-            .decodeList<TransactionDto>()
-            .map { it.toDomain() }
+        val (startDate, endDate) = monthRange(yearMonth)
+        transactionDao.getByDateRange(userId, startDate, endDate).map { it.toDomain() }
     }.logResult(AppLog.Feature.TRANSACTION, "getMonthlyTransactions") { "${it.size} items" }
         .mapToAppError()
 
     override suspend fun getMonthlyReport(userId: String, yearMonth: String): Result<List<ReportEntry>> = runCatching {
         AppLog.d(AppLog.Feature.TRANSACTION, "getMonthlyReport", "userId=${userId.take(8)}, yearMonth=$yearMonth")
-        val params = buildJsonObject { put("p_year_month", yearMonth) }
-        supabase.postgrest.rpc("get_monthly_report", params).decodeList<MonthlyReportRowDto>()
-            .map { it.toDomain() }
+        val (startDate, endDate) = monthRange(yearMonth)
+        transactionDao.getMonthlyReport(userId, startDate, endDate).map { it.toDomain() }
     }.logResult(AppLog.Feature.TRANSACTION, "getMonthlyReport") { "${it.size} rows" }
         .mapToAppError()
 
     override suspend fun createTransaction(request: CreateTransactionRequest): Result<Transaction> = runCatching {
-        AppLog.d(AppLog.Feature.TRANSACTION, "createTransaction", "date=${request.date}, title=${request.title}, amount=${request.amount}, type=${request.type}")
-        val maxPosition = supabase.from("transactions")
-            .select {
-                filter {
-                    eq("user_id", request.userId)
-                    eq("date", request.date)
-                }
-                order("position", order = Order.DESCENDING)
-                limit(count = 1)
-            }
-            .decodeList<TransactionDto>()
-            .firstOrNull()?.position ?: -1
+        AppLog.d(AppLog.Feature.TRANSACTION, "createTransaction", "date=${request.date}, amount=${request.amount}")
+        val localId = UUID.randomUUID().toString()
 
-        val row = request.toJsonObject(maxPosition + 1)
-        supabase.from("transactions")
+        if (!sessionRepository.isAuthenticated()) {
+            val maxPos = transactionDao.getMaxPositionForDate(request.userId, request.date) ?: -1
+            val entity = TransactionEntity(
+                id = localId,
+                userId = request.userId,
+                sourceCardId = request.sourceCardId,
+                date = request.date,
+                title = request.title,
+                amount = request.amount,
+                categoryId = request.categoryId,
+                type = request.type.name.lowercase(),
+                note = request.note,
+                position = maxPos + 1,
+                createdAt = Instant.now().toString(),
+                updatedAt = null,
+                syncedAt = null,
+                deletedAt = null,
+            )
+            transactionDao.upsert(entity)
+            val category = request.categoryId?.let { categoryDao.getById(it)?.toDomain() }
+            return@runCatching entity.toDomain(category = category)
+        }
+
+        val maxPosition = transactionDao.getMaxPositionForDate(request.userId, request.date) ?: -1
+
+        val row = buildJsonObject {
+            put("id", localId)
+            request.toJsonObject(maxPosition + 1).entries.forEach { (k, v) -> put(k, v) }
+        }
+        val dto = supabase.from("transactions")
             .insert(row) { select() }
             .decodeSingle<TransactionDto>()
-            .toDomain()
+        transactionDao.upsert(dto.toEntity(syncedAt = Instant.now().toString()))
+        dto.toDomain()
     }.logResult(AppLog.Feature.TRANSACTION, "createTransaction") { "id=${it.id}" }
         .mapToAppError()
 
@@ -100,7 +98,25 @@ class TransactionRepositoryImpl(
         transactionId: String,
         request: UpdateTransactionRequest,
     ): Result<Transaction> = runCatching {
-        AppLog.d(AppLog.Feature.TRANSACTION, "updateTransaction", "id=$transactionId, amount=${request.amount}, type=${request.type}")
+        AppLog.d(AppLog.Feature.TRANSACTION, "updateTransaction", "id=$transactionId, amount=${request.amount}")
+
+        if (!sessionRepository.isAuthenticated()) {
+            val existing = transactionDao.getById(transactionId)
+            val updated = existing?.copy(
+                title = request.title,
+                amount = request.amount,
+                categoryId = request.categoryId,
+                type = request.type.name.lowercase(),
+                note = request.note,
+                date = request.date,
+                sourceCardId = request.sourceCardId,
+                updatedAt = Instant.now().toString(),
+            ) ?: return@runCatching error("Transaction $transactionId not found locally")
+            transactionDao.upsert(updated)
+            val category = request.categoryId?.let { categoryDao.getById(it)?.toDomain() }
+            return@runCatching updated.toDomain(category = category)
+        }
+
         val row = request.toJsonObject()
         val updatedDto = supabase.from("transactions")
             .update(row) {
@@ -108,14 +124,17 @@ class TransactionRepositoryImpl(
                 select()
             }
             .decodeSingle<TransactionDto>()
+        transactionDao.upsert(updatedDto.toEntity(syncedAt = Instant.now().toString()))
         attachCategories(listOf(updatedDto)).first()
     }.logResult(AppLog.Feature.TRANSACTION, "updateTransaction") { "id=${it.id}" }
         .mapToAppError()
 
     override suspend fun deleteTransaction(transactionId: String): Result<Unit> = runCatching {
         AppLog.d(AppLog.Feature.TRANSACTION, "deleteTransaction", "id=$transactionId")
-        supabase.from("transactions")
-            .delete { filter { eq("id", transactionId) } }
+        transactionDao.deleteById(transactionId)
+        if (sessionRepository.isAuthenticated()) {
+            supabase.from("transactions").delete { filter { eq("id", transactionId) } }
+        }
         Unit
     }.logResult(AppLog.Feature.TRANSACTION, "deleteTransaction") { "deleted" }
         .mapToAppError()
@@ -126,46 +145,48 @@ class TransactionRepositoryImpl(
         toDate: String,
     ): Result<List<Transaction>> = runCatching {
         AppLog.d(AppLog.Feature.TRANSACTION, "copyFromYesterday", "from=$fromDate, to=$toDate")
-        val yesterday = supabase.from("transactions")
-            .select {
-                filter {
-                    eq("user_id", userId)
-                    eq("date", fromDate)
-                }
-                order("position", order = Order.ASCENDING)
-            }
-            .decodeList<TransactionDto>()
 
-        if (yesterday.isEmpty()) return@runCatching emptyList()
-
-        val maxPosition = supabase.from("transactions")
-            .select {
-                filter {
-                    eq("user_id", userId)
-                    eq("date", toDate)
-                }
-                order("position", order = Order.DESCENDING)
-                limit(count = 1)
-            }
-            .decodeList<TransactionDto>()
-            .firstOrNull()?.position ?: -1
-
-        val newRows = yesterday.mapIndexed { index, t ->
-            CreateTransactionRequest(
-                userId = userId,
-                sourceCardId = t.sourceCardId,
+        val source = transactionDao.getByDate(userId, fromDate)
+        if (source.isEmpty()) return@runCatching emptyList()
+        val maxPos = transactionDao.getMaxPositionForDate(userId, toDate) ?: -1
+        val now = Instant.now().toString()
+        val copies = source.mapIndexed { index, t ->
+            t.copy(
+                id = UUID.randomUUID().toString(),
                 date = toDate,
-                title = t.title,
-                amount = t.amount,
-                categoryId = t.categoryId,
-                type = t.type.toDomain(),
-                note = t.note,
-            ).toJsonObject(maxPosition + 1 + index)
+                position = maxPos + 1 + index,
+                createdAt = now,
+                updatedAt = null,
+                syncedAt = null,
+            )
         }
-        supabase.from("transactions")
-            .insert(newRows) { select() }
-            .decodeList<TransactionDto>()
-            .let { attachCategories(it) }
+        transactionDao.upsert(*copies.toTypedArray())
+
+        if (sessionRepository.isAuthenticated()) {
+            runCatching {
+                val insertRows = copies.map { entity ->
+                    buildJsonObject {
+                        put("id", entity.id)
+                        put("user_id", entity.userId)
+                        put("date", entity.date)
+                        put("title", entity.title)
+                        put("amount", entity.amount)
+                        put("type", entity.type)
+                        put("position", entity.position)
+                        if (entity.sourceCardId != null) put("source_card_id", entity.sourceCardId)
+                        if (entity.categoryId != null) put("category_id", entity.categoryId)
+                        if (entity.note != null) put("note", entity.note)
+                    }
+                }
+                val inserted = supabase.from("transactions")
+                    .insert(insertRows) { select() }
+                    .decodeList<TransactionDto>()
+                val syncNow = Instant.now().toString()
+                transactionDao.upsert(*inserted.map { it.toEntity(syncedAt = syncNow) }.toTypedArray())
+            }
+        }
+
+        attachCategoriesLocal(copies, userId)
     }.logResult(AppLog.Feature.TRANSACTION, "copyFromYesterday") { "${it.size} copied" }
         .mapToAppError()
 
@@ -176,43 +197,23 @@ class TransactionRepositoryImpl(
         startDate: String?,
         endDate: String?,
     ): Result<List<Transaction>> = runCatching {
-        AppLog.d(
-            AppLog.Feature.TRANSACTION,
-            "searchTransactions",
-            "userId=${userId.take(8)}, query=$query, categories=$categoryIds, start=$startDate, end=$endDate",
-        )
-
-        // When exactly one category is selected we push it down to the RPC so
-        // the DB can filter early. For multiple categories we skip p_category_id
-        // and apply client-side filtering on the (already date+text-filtered) result.
+        AppLog.d(AppLog.Feature.TRANSACTION, "searchTransactions", "query=$query, categories=$categoryIds")
         val singleCategoryId = if (categoryIds.size == 1) categoryIds.first() else null
-
-        val params = buildJsonObject {
-            put("p_user_id", userId)
-            put("p_query", query)
-            if (startDate != null) put("p_date_from", startDate)
-            if (endDate != null) put("p_date_to", endDate)
-            if (singleCategoryId != null) put("p_category_id", singleCategoryId)
-            put("p_limit", 500)
-            put("p_offset", 0)
+        val results = transactionDao.search(
+            userId = userId,
+            query = query,
+            startDate = startDate,
+            endDate = endDate,
+        ).let { entities ->
+            if (singleCategoryId != null) entities.filter { it.categoryId == singleCategoryId }
+            else if (categoryIds.size > 1) entities.filter { it.categoryId in categoryIds }
+            else entities
         }
-
-        val txns = supabase.postgrest
-            .rpc("search_transactions_unaccent", params)
-            .decodeList<TransactionDto>()
-
-        AppLog.d(
-            AppLog.Feature.TRANSACTION,
-            "searchTransactions",
-            "RPC returned ${txns.size} rows",
-        )
-
-        val results = attachCategories(txns)
-
-        // Apply multi-category filter client-side (single-category already handled by RPC)
-        if (categoryIds.size > 1) results.filter { it.categoryId in categoryIds } else results
+        attachCategoriesLocal(results, userId)
     }.logResult(AppLog.Feature.TRANSACTION, "searchTransactions") { "${it.size} items" }
         .mapToAppError()
+
+    // ── Helpers ──────────────────────────────────────────────────────────────
 
     private suspend fun attachCategories(transactionDtos: List<TransactionDto>): List<Transaction> {
         if (transactionDtos.isEmpty()) return emptyList()
@@ -224,5 +225,29 @@ class TransactionRepositoryImpl(
         return transactionDtos.map { dto ->
             dto.toDomain(category = dto.categoryId?.let { categoryById[it] })
         }
+    }
+
+    private suspend fun attachCategoriesLocal(
+        entities: List<TransactionEntity>,
+        userId: String,
+    ): List<Transaction> {
+        if (entities.isEmpty()) return emptyList()
+        val catIds = entities.mapNotNull { it.categoryId }.distinct()
+        if (catIds.isEmpty()) return entities.map { it.toDomain() }
+        val categoryById = categoryDao.getAll(userId).associateBy({ it.id }, { it.toDomain() })
+        return entities.map { entity ->
+            entity.toDomain(category = entity.categoryId?.let { categoryById[it] })
+        }
+    }
+
+    private fun monthRange(yearMonth: String): Pair<String, String> {
+        val startDate = "$yearMonth-01"
+        val endDate = if (yearMonth.endsWith("12")) {
+            "${yearMonth.take(4).toInt() + 1}-01"
+        } else {
+            val parts = yearMonth.split("-")
+            "${parts[0]}-${(parts[1].toInt() + 1).toString().padStart(2, '0')}"
+        }
+        return Pair(startDate, "$endDate-01")
     }
 }

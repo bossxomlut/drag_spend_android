@@ -20,6 +20,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.navArgument
 import com.bossxomlut.dragspend.data.model.ProfileDto
 import com.bossxomlut.dragspend.ui.screen.account.AccountDeletedScreen
+import com.bossxomlut.dragspend.util.GuestSession
 import com.bossxomlut.dragspend.util.ProfileCache
 import com.bossxomlut.dragspend.ui.screen.auth.ForgotPasswordScreen
 import com.bossxomlut.dragspend.ui.screen.auth.LoginScreen
@@ -54,6 +55,7 @@ fun AppNavGraph(
     onReady: () -> Unit = {},
     modifier: Modifier = Modifier,
     profileCache: ProfileCache = koinInject(),
+    guestSession: GuestSession = koinInject(),
 ) {
     var startDestination by remember { mutableStateOf(StartDestination.CHECKING) }
     var selectedLanguage by remember { mutableStateOf("en") }
@@ -73,8 +75,11 @@ fun AppNavGraph(
 
         val session = supabase.auth.currentSessionOrNull()
         if (session == null) {
-            AppLog.d(AppLog.Feature.PERF, "navGraph.no_session", "→ LOGIN, total=${SystemClock.elapsedRealtime() - t0}ms")
-            startDestination = StartDestination.LOGIN
+            // Guest mode: không bắt buộc đăng nhập
+            val guestLanguage = guestSession.getLanguage()
+            selectedLanguage = guestLanguage ?: "en"
+            startDestination = if (guestLanguage == null) StartDestination.ONBOARDING else StartDestination.DASHBOARD
+            AppLog.d(AppLog.Feature.PERF, "navGraph.guest_mode", "lang=$guestLanguage → $startDestination, total=${SystemClock.elapsedRealtime() - t0}ms")
             currentOnReady()
             return@LaunchedEffect
         }
@@ -132,7 +137,8 @@ fun AppNavGraph(
         StartDestination.ONBOARDING -> Route.Onboarding.route
         StartDestination.ACCOUNT_DELETED -> Route.AccountDeleted.route
         StartDestination.DASHBOARD -> Route.Dashboard.route
-        StartDestination.CHECKING -> Route.Login.route
+        // CHECKING không bao giờ được render — fallback về Dashboard
+        StartDestination.CHECKING -> Route.Dashboard.route
     }
 
     val context = LocalContext.current
@@ -242,8 +248,13 @@ fun AppNavGraph(
             composable(Route.Onboarding.route) {
                 LanguageScreen(
                     onOnboardingComplete = { language ->
+                        selectedLanguage = language
                         val userId = supabase.auth.currentUserOrNull()?.id
-                        if (userId != null) profileCache.saveLanguage(userId, language)
+                        if (userId != null) {
+                            profileCache.saveLanguage(userId, language)
+                        } else {
+                            guestSession.saveLanguage(language)
+                        }
                         navController.navigate(Route.Dashboard.route) {
                             popUpTo(Route.Onboarding.route) { inclusive = true }
                         }
@@ -253,9 +264,11 @@ fun AppNavGraph(
 
             composable(Route.Dashboard.route) {
                 DashboardScreen(
+                    language = selectedLanguage,
                     onSignOut = {
                         profileCache.clear()
-                        navController.navigate(Route.Login.route) {
+                        // Sign out → về Dashboard dạng guest (không bắt login)
+                        navController.navigate(Route.Dashboard.route) {
                             popUpTo(0) { inclusive = true }
                         }
                     },
@@ -279,7 +292,8 @@ fun AppNavGraph(
                     onDone = { navController.popBackStack() },
                     onSignOut = {
                         profileCache.clear()
-                        navController.navigate(Route.Login.route) {
+                        // Sign out → về Dashboard dạng guest
+                        navController.navigate(Route.Dashboard.route) {
                             popUpTo(0) { inclusive = true }
                         }
                     },

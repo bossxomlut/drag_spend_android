@@ -1,6 +1,5 @@
 package com.bossxomlut.dragspend.domain.usecase.category
 
-import com.bossxomlut.dragspend.domain.error.AppError
 import com.bossxomlut.dragspend.domain.model.Category
 import com.bossxomlut.dragspend.domain.model.TransactionType
 import com.bossxomlut.dragspend.domain.repository.CategoryRepository
@@ -17,8 +16,7 @@ class CreateCategoryUseCase(
         type: TransactionType,
         language: String,
     ): Result<Category> {
-        val userId = sessionRepository.getCurrentUserId()
-            ?: return Result.failure(AppError.Unauthorized)
+        val userId = sessionRepository.getLocalUserId()
         return categoryRepository.createCategory(userId, name, icon, color, type, language)
     }
 }

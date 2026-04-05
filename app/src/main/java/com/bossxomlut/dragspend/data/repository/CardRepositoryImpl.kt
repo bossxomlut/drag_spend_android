@@ -1,67 +1,51 @@
 package com.bossxomlut.dragspend.data.repository
 
+import com.bossxomlut.dragspend.data.local.dao.CardDao
+import com.bossxomlut.dragspend.data.local.dao.CardVariantDao
+import com.bossxomlut.dragspend.data.local.dao.CategoryDao
+import com.bossxomlut.dragspend.data.local.entity.CardVariantEntity
+import com.bossxomlut.dragspend.data.local.entity.SpendingCardEntity
+import com.bossxomlut.dragspend.data.local.toDomain
+import com.bossxomlut.dragspend.data.local.toEntity
 import com.bossxomlut.dragspend.data.model.CardVariantDto
-import com.bossxomlut.dragspend.data.model.CategoryDto
 import com.bossxomlut.dragspend.data.model.SpendingCardDto
 import com.bossxomlut.dragspend.data.model.toDomain
 import com.bossxomlut.dragspend.domain.error.mapToAppError
 import com.bossxomlut.dragspend.domain.model.SpendingCard
 import com.bossxomlut.dragspend.domain.repository.CardRepository
 import com.bossxomlut.dragspend.domain.repository.CreateCardRequest
+import com.bossxomlut.dragspend.domain.repository.SessionRepository
 import com.bossxomlut.dragspend.util.AppLog
 import com.bossxomlut.dragspend.util.logResult
 import io.github.jan.supabase.SupabaseClient
 import io.github.jan.supabase.postgrest.from
 import io.github.jan.supabase.postgrest.postgrest
-import io.github.jan.supabase.postgrest.query.Order
 import io.github.jan.supabase.postgrest.rpc
+import java.time.Instant
+import java.util.UUID
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 
 class CardRepositoryImpl(
     private val supabase: SupabaseClient,
+    private val cardDao: CardDao,
+    private val cardVariantDao: CardVariantDao,
+    private val categoryDao: CategoryDao,
+    private val sessionRepository: SessionRepository,
 ) : CardRepository {
 
     override suspend fun getCards(userId: String): Result<List<SpendingCard>> = runCatching {
         AppLog.d(AppLog.Feature.CARD, "getCards", "userId=${userId.take(8)}")
-        val cardDtos = supabase.from("spending_cards")
-            .select {
-                filter { eq("user_id", userId) }
-                order("use_count", order = Order.DESCENDING)
-                order("position", order = Order.ASCENDING)
-            }
-            .decodeList<SpendingCardDto>()
-
-        val cardIds = cardDtos.map { it.id }
-        val variantDtos = if (cardIds.isNotEmpty()) {
-            supabase.from("card_variants")
-                .select {
-                    filter { isIn("card_id", cardIds) }
-                    order("position", order = Order.ASCENDING)
-                }
-                .decodeList<CardVariantDto>()
-        } else {
-            emptyList()
-        }
-
-        val variantsByCard = variantDtos.groupBy { it.cardId }
-
-        val categoryIds = cardDtos.mapNotNull { it.categoryId }.distinct()
-        val categories = if (categoryIds.isNotEmpty()) {
-            supabase.from("categories")
-                .select { filter { isIn("id", categoryIds) } }
-                .decodeList<CategoryDto>()
-                .map { it.toDomain() }
-        } else {
-            emptyList()
-        }
-        val categoryById = categories.associateBy { it.id }
-
-        cardDtos.map { cardDto ->
-            val domainVariants = (variantsByCard[cardDto.id] ?: emptyList()).map { it.toDomain() }
-            cardDto.toDomain(
-                category = cardDto.categoryId?.let { categoryById[it] },
-                variants = domainVariants,
+        val localCards = cardDao.getAll(userId)
+        if (localCards.isEmpty()) return@runCatching emptyList()
+        val cardIds = localCards.map { it.id }
+        val variantsByCard = cardVariantDao.getByCardIds(cardIds).groupBy { it.cardId }
+        val categoryById = categoryDao.getAll(userId).associateBy({ it.id }, { it.toDomain() })
+        localCards.map { card ->
+            val variants = (variantsByCard[card.id] ?: emptyList()).map { it.toDomain() }
+            card.toDomain(
+                category = card.categoryId?.let { categoryById[it] },
+                variants = variants,
             )
         }
     }.logResult(AppLog.Feature.CARD, "getCards") { "${it.size} cards" }
@@ -69,60 +53,135 @@ class CardRepositoryImpl(
 
     override suspend fun createCard(request: CreateCardRequest): Result<SpendingCard> = runCatching {
         AppLog.d(AppLog.Feature.CARD, "createCard", "title=${request.title}, type=${request.type}")
-        val cardDto = supabase.from("spending_cards")
-            .insert(request.toJsonObject()) { select() }
-            .decodeSingle<SpendingCardDto>()
+        val localCardId = UUID.randomUUID().toString()
+        val now = Instant.now().toString()
 
+        if (!sessionRepository.isAuthenticated()) {
+            val cardEntity = SpendingCardEntity(
+                id = localCardId,
+                userId = request.userId,
+                title = request.title,
+                categoryId = request.categoryId,
+                type = request.type.name.lowercase(),
+                note = request.note,
+                position = 0,
+                useCount = 0,
+                language = request.language,
+                createdAt = now,
+                updatedAt = null,
+                syncedAt = null,
+                deletedAt = null,
+            )
+            cardDao.upsert(cardEntity)
+            val variantEntities = request.variants.mapIndexed { index, v ->
+                CardVariantEntity(
+                    id = UUID.randomUUID().toString(),
+                    cardId = localCardId,
+                    label = v.label,
+                    amount = v.amount,
+                    isDefault = v.isDefault,
+                    position = index,
+                    createdAt = now,
+                    syncedAt = null,
+                )
+            }
+            if (variantEntities.isNotEmpty()) cardVariantDao.upsert(*variantEntities.toTypedArray())
+            return@runCatching cardEntity.toDomain(category = null, variants = variantEntities.map { it.toDomain() })
+        }
+
+        val insertJson = buildJsonObject {
+            put("id", localCardId)
+            request.toJsonObject().entries.forEach { (k, v) -> put(k, v) }
+        }
+        val cardDto = supabase.from("spending_cards")
+            .insert(insertJson) { select() }
+            .decodeSingle<SpendingCardDto>()
         val savedVariants = if (request.variants.isNotEmpty()) {
             val variantRows = request.variants.mapIndexed { index, v -> v.toJsonObject(cardDto.id, index) }
             supabase.from("card_variants")
                 .insert(variantRows) { select() }
                 .decodeList<CardVariantDto>()
-                .map { it.toDomain() }
         } else {
             emptyList()
         }
-        cardDto.toDomain(category = null, variants = savedVariants)
+        cardDao.upsert(cardDto.toEntity(syncedAt = now))
+        if (savedVariants.isNotEmpty()) cardVariantDao.upsert(*savedVariants.map { it.toEntity(syncedAt = now) }.toTypedArray())
+        cardDto.toDomain(category = null, variants = savedVariants.map { it.toDomain() })
     }.logResult(AppLog.Feature.CARD, "createCard") { "id=${it.id}" }
         .mapToAppError()
 
     override suspend fun updateCard(cardId: String, request: CreateCardRequest): Result<SpendingCard> = runCatching {
         AppLog.d(AppLog.Feature.CARD, "updateCard", "id=$cardId, title=${request.title}")
+        val now = Instant.now().toString()
+
+        if (!sessionRepository.isAuthenticated()) {
+            val existing = cardDao.getById(cardId)
+            val updated = existing?.copy(
+                title = request.title,
+                categoryId = request.categoryId,
+                type = request.type.name.lowercase(),
+                note = request.note,
+                language = request.language,
+                updatedAt = now,
+            ) ?: return@runCatching error("Card $cardId not found locally")
+            cardDao.upsert(updated)
+            cardVariantDao.deleteByCardId(cardId)
+            val newVariants = request.variants.mapIndexed { index, v ->
+                CardVariantEntity(
+                    id = UUID.randomUUID().toString(),
+                    cardId = cardId,
+                    label = v.label,
+                    amount = v.amount,
+                    isDefault = v.isDefault,
+                    position = index,
+                    createdAt = now,
+                    syncedAt = null,
+                )
+            }
+            if (newVariants.isNotEmpty()) cardVariantDao.upsert(*newVariants.toTypedArray())
+            return@runCatching updated.toDomain(category = null, variants = newVariants.map { it.toDomain() })
+        }
+
         val cardDto = supabase.from("spending_cards")
             .update(request.toJsonObject()) {
                 filter { eq("id", cardId) }
                 select()
             }
             .decodeSingle<SpendingCardDto>()
-
-        supabase.from("card_variants")
-            .delete { filter { eq("card_id", cardId) } }
-
+        supabase.from("card_variants").delete { filter { eq("card_id", cardId) } }
         val savedVariants = if (request.variants.isNotEmpty()) {
             val variantRows = request.variants.mapIndexed { index, v -> v.toJsonObject(cardDto.id, index) }
             supabase.from("card_variants")
                 .insert(variantRows) { select() }
                 .decodeList<CardVariantDto>()
-                .map { it.toDomain() }
         } else {
             emptyList()
         }
-        cardDto.toDomain(category = null, variants = savedVariants)
+        cardDao.upsert(cardDto.toEntity(syncedAt = now))
+        cardVariantDao.deleteByCardId(cardId)
+        if (savedVariants.isNotEmpty()) cardVariantDao.upsert(*savedVariants.map { it.toEntity(syncedAt = now) }.toTypedArray())
+        cardDto.toDomain(category = null, variants = savedVariants.map { it.toDomain() })
     }.logResult(AppLog.Feature.CARD, "updateCard") { "id=${it.id}" }
         .mapToAppError()
 
     override suspend fun deleteCard(cardId: String): Result<Unit> = runCatching {
         AppLog.d(AppLog.Feature.CARD, "deleteCard", "id=$cardId")
-        supabase.from("spending_cards")
-            .delete { filter { eq("id", cardId) } }
+        cardVariantDao.deleteByCardId(cardId)
+        cardDao.deleteById(cardId)
+        if (sessionRepository.isAuthenticated()) {
+            supabase.from("spending_cards").delete { filter { eq("id", cardId) } }
+        }
         Unit
     }.logResult(AppLog.Feature.CARD, "deleteCard") { "deleted" }
         .mapToAppError()
 
     override suspend fun incrementUseCount(cardId: String): Result<Unit> = runCatching {
         AppLog.d(AppLog.Feature.CARD, "incrementUseCount", "id=$cardId")
-        val params = buildJsonObject { put("card_id", cardId) }
-        supabase.postgrest.rpc("increment_card_use_count", params)
+        cardDao.incrementUseCount(cardId)
+        if (sessionRepository.isAuthenticated()) {
+            val params = buildJsonObject { put("card_id", cardId) }
+            supabase.postgrest.rpc("increment_card_use_count", params)
+        }
         Unit
     }.logResult(AppLog.Feature.CARD, "incrementUseCount") { "ok" }
         .mapToAppError()

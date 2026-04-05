@@ -1,6 +1,5 @@
 package com.bossxomlut.dragspend.domain.usecase.transaction
 
-import com.bossxomlut.dragspend.domain.error.AppError
 import com.bossxomlut.dragspend.domain.model.Transaction
 import com.bossxomlut.dragspend.domain.repository.SessionRepository
 import com.bossxomlut.dragspend.domain.repository.TransactionRepository
@@ -15,8 +14,7 @@ class SearchTransactionsUseCase(
         startDate: String?,
         endDate: String?,
     ): Result<List<Transaction>> {
-        val userId = sessionRepository.getCurrentUserId()
-            ?: return Result.failure(AppError.Unauthorized)
+        val userId = sessionRepository.getLocalUserId()
         return transactionRepository.searchTransactions(userId, query, categoryIds, startDate, endDate)
     }
 }

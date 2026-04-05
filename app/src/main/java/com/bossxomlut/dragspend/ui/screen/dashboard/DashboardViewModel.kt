@@ -41,8 +41,8 @@ class DashboardViewModel(
     private val _dirtyDays = MutableStateFlow<Set<String>>(emptySet())
     val dirtyDays: StateFlow<Set<String>> = _dirtyDays.asStateFlow()
 
-    val currentUserId: String?
-        get() = sessionRepository.getCurrentUserId()
+    val currentUserId: String
+        get() = sessionRepository.getLocalUserId()
 
     init {
         loadCategories()
@@ -78,8 +78,7 @@ class DashboardViewModel(
     }
 
     private fun loadCategories() {
-        val userId = currentUserId ?: return
-        AppLog.d(AppLog.Feature.DASHBOARD, "loadCategories", "userId=${userId.take(8)}")
+        AppLog.d(AppLog.Feature.DASHBOARD, "loadCategories", "start")
         viewModelScope.launch {
             getCategoriesUseCase()
                 .onSuccess { _categories.value = it }
@@ -90,10 +89,10 @@ class DashboardViewModel(
         loadCategories()
     }
 
-    fun createCategory(name: String, icon: String, color: String, type: TransactionType) {
+    fun createCategory(name: String, icon: String, color: String, type: TransactionType, language: String) {
         AppLog.d(AppLog.Feature.DASHBOARD, "createCategory", "name=$name, type=$type")
         viewModelScope.launch {
-            createCategoryUseCase(name, icon, color, type, "vi")
+            createCategoryUseCase(name, icon, color, type, language)
                 .onSuccess { loadCategories() }
         }
     }

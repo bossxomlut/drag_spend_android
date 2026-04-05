@@ -72,18 +72,12 @@ class TodayViewModel(
 
     @RequiresApi(Build.VERSION_CODES.O)
     private val dateFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd")
-    private val currentUserId get() = sessionRepository.getCurrentUserId()
-
     private var loadDataJob: Job? = null
     private val monthTotalsCache = mutableMapOf<String, Map<String, DayTotal>>()
     private val dailyTransactionsCache = mutableMapOf<String, List<Transaction>>()
     private var cardsInitialized = false
 
     fun loadData(date: String) {
-        if (currentUserId == null) {
-            AppLog.w(AppLog.Feature.TRANSACTION, "loadData", "no authenticated user")
-            return
-        }
         AppLog.d(AppLog.Feature.TRANSACTION, "loadData", "date=$date")
 
         if (!cardsInitialized) {
@@ -174,7 +168,7 @@ class TodayViewModel(
     }
 
     fun addTransactionFromCard(card: SpendingCard, date: String, amount: Long = card.defaultAmount) {
-        val userId = currentUserId ?: return
+        val userId = sessionRepository.getLocalUserId()
         AppLog.d(AppLog.Feature.TRANSACTION, "addTransactionFromCard", "cardId=${card.id}, title=${card.title}, amount=$amount, date=$date")
         if (amount <= 0L) {
             _uiState.update {

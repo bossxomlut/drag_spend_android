@@ -92,6 +92,7 @@ import org.koin.androidx.compose.koinViewModel
 @Composable
 fun DayDetailScreen(
     date: String,
+    language: String,
     dashboardViewModel: DashboardViewModel,
     onNavigateBack: () -> Unit,
     modifier: Modifier = Modifier,
@@ -322,7 +323,7 @@ fun DayDetailScreen(
             },
             onDismiss = { editTransaction = null },
             onCreateCategory = { name, icon, color, type ->
-                dashboardViewModel.createCategory(name, icon, color, type)
+                dashboardViewModel.createCategory(name, icon, color, type, language)
             },
         )
     }
@@ -379,7 +380,7 @@ fun DayDetailScreen(
             },
             onDismiss = { showAddDialog = false },
             onCreateCategory = { name, icon, color, type ->
-                dashboardViewModel.createCategory(name, icon, color, type)
+                dashboardViewModel.createCategory(name, icon, color, type, language)
             },
         )
     }

@@ -170,6 +170,7 @@ import org.koin.androidx.compose.koinViewModel
 @Composable
 fun TodayScreen(
     dashboardViewModel: DashboardViewModel,
+    language: String,
     onNavigateToSettings: () -> Unit,
     onNavigateToSearch: () -> Unit = {},
     modifier: Modifier = Modifier,
@@ -180,8 +181,7 @@ fun TodayScreen(
     val categories by dashboardViewModel.categories.collectAsStateWithLifecycle()
     val dirtyDays by dashboardViewModel.dirtyDays.collectAsStateWithLifecycle()
     var toastMessage by remember { mutableStateOf<String?>(null) }
-    val userId = dashboardViewModel.currentUserId ?: ""
-    val language = "vi"
+    val userId = dashboardViewModel.currentUserId
     var addedCardIds by remember { mutableStateOf(setOf<String>()) }
 
     // Load transactions for selected date (debounced)
@@ -523,7 +523,7 @@ fun TodayScreen(
             },
             onDismiss = { showCreateCard = false },
             onCreateCategory = { name, icon, color, type ->
-                dashboardViewModel.createCategory(name, icon, color, type)
+                dashboardViewModel.createCategory(name, icon, color, type, language)
             },
         )
     }
@@ -540,7 +540,7 @@ fun TodayScreen(
             },
             onDismiss = { editCard = null },
             onCreateCategory = { name, icon, color, type ->
-                dashboardViewModel.createCategory(name, icon, color, type)
+                dashboardViewModel.createCategory(name, icon, color, type, language)
             },
         )
     }
@@ -557,7 +557,7 @@ fun TodayScreen(
             },
             onDismiss = { editTransaction = null },
             onCreateCategory = { name, icon, color, type ->
-                dashboardViewModel.createCategory(name, icon, color, type)
+                dashboardViewModel.createCategory(name, icon, color, type, language)
             },
         )
     }
