@@ -79,7 +79,9 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DatePicker
+import androidx.compose.material3.DatePickerDefaults
 import androidx.compose.material3.DatePickerDialog
+import androidx.compose.material3.DatePickerFormatter
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -155,6 +157,8 @@ import java.time.YearMonth
 import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
 import java.time.format.TextStyle
+import com.bossxomlut.dragspend.ui.util.currentLocale
+import com.bossxomlut.dragspend.ui.util.rememberLocalizedDatePickerFormatter
 import java.util.Locale
 import kotlin.math.abs
 import kotlin.math.roundToInt
@@ -314,12 +318,13 @@ fun TodayScreen(
                     },
                     actions = {
                         // Date chip — shows selected date; tap to jump back to today
+                        val locale = currentLocale
                         val appBarDateFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd")
                         val appBarToday = LocalDate.now().format(appBarDateFormatter)
                         val isViewingToday = selectedDate == appBarToday
                         val chipDateLabel = runCatching {
                             LocalDate.parse(selectedDate, appBarDateFormatter)
-                                .format(DateTimeFormatter.ofPattern("dd/MM (EEE)", Locale.getDefault()))
+                                .format(DateTimeFormatter.ofPattern("dd/MM (EEE)", locale))
                         }.getOrElse { stringResource(R.string.tab_today) }
 
                         Surface(
@@ -619,6 +624,7 @@ private fun DayView(
     isLoading: Boolean = false,
     modifier: Modifier = Modifier,
 ) {
+    val locale = currentLocale
     val dateFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd")
     val today = LocalDate.parse(selectedDate, dateFormatter)
     val isToday = today == LocalDate.now()
@@ -666,7 +672,7 @@ private fun DayView(
                         Text(
                             text = today.dayOfWeek.getDisplayName(
                                 TextStyle.FULL,
-                                Locale.getDefault(),
+                                locale,
                             ),
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.Bold,
@@ -690,7 +696,7 @@ private fun DayView(
                     }
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(
-                            text = today.format(DateTimeFormatter.ofPattern("d MMMM yyyy", Locale.getDefault())),
+                            text = today.format(DateTimeFormatter.ofPattern("d MMMM yyyy", locale)),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
@@ -898,6 +904,9 @@ private fun DayView(
                     .toInstant()
                     .toEpochMilli(),
             )
+            val datePickerFormatter = rememberLocalizedDatePickerFormatter()
+            val localizedCtx = LocalContext.current
+            CompositionLocalProvider(LocalContext provides localizedCtx) {
             DatePickerDialog(
                 onDismissRequest = { showDatePicker = false },
                 confirmButton = {
@@ -919,7 +928,10 @@ private fun DayView(
                     }
                 },
             ) {
-                DatePicker(state = datePickerState)
+                DatePicker(
+                    dateFormatter = datePickerFormatter,
+                    state = datePickerState)
+            }
             }
         }
     } // end DayView Box
@@ -943,6 +955,7 @@ private fun MonthOverviewCalendar(
     onDayClick: (String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val locale = currentLocale
     val dateFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd")
     val today = LocalDate.now()
     val firstDayOfMonth = yearMonth.atDay(1)
@@ -950,10 +963,10 @@ private fun MonthOverviewCalendar(
     val startOffset = (firstDayOfMonth.dayOfWeek.value - 1 + 7) % 7
     val daysInMonth = yearMonth.lengthOfMonth()
 
-    val dayLabels = remember {
+    val dayLabels = remember(locale) {
         (0..6).map { offset ->
             DayOfWeek.MONDAY.plus(offset.toLong())
-                .getDisplayName(TextStyle.SHORT, Locale.getDefault())
+                .getDisplayName(TextStyle.SHORT, locale)
         }
     }
 
@@ -1124,6 +1137,7 @@ private fun MonthPickerBottomSheet(
     val today = YearMonth.now()
     var displayYear by remember { mutableStateOf(current.year) }
     val localContext = LocalContext.current
+    val locale = currentLocale
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val monthFormatter = DateTimeFormatter.ofPattern("yyyy-MM")
 
@@ -1222,7 +1236,7 @@ private fun MonthPickerBottomSheet(
                             },
                     ) {
                         Text(
-                            text = ym.month.getDisplayName(TextStyle.SHORT, Locale.getDefault()),
+                            text = ym.month.getDisplayName(TextStyle.SHORT, locale),
                             style = MaterialTheme.typography.bodyMedium,
                             fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
                             color = textColor,
@@ -1994,3 +2008,4 @@ private fun SpendingCardsPanelPreview() {
         )
     }
 }
+

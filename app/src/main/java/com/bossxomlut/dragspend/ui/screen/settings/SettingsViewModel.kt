@@ -92,6 +92,9 @@ class SettingsViewModel(
     fun setLanguage(language: String) {
         AppLog.d(AppLog.Feature.SETTINGS, "setLanguage", "language=$language")
         _uiState.update { it.copy(language = language) }
+        getApplication<android.app.Application>()
+            .getSharedPreferences("app_lang_prefs", android.content.Context.MODE_PRIVATE)
+            .edit().putString("language", language).apply()
         viewModelScope.launch {
             updateProfileLanguageUseCase(language)
                 .onFailure { e -> _uiState.update { it.copy(error = e.toFriendlyMessage()) } }

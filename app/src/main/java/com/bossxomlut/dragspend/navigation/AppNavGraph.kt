@@ -44,6 +44,8 @@ import io.github.jan.supabase.postgrest.from
 import kotlinx.coroutines.flow.first
 import org.koin.compose.koinInject
 import android.os.SystemClock
+import androidx.appcompat.app.AppCompatDelegate
+import androidx.core.os.LocaleListCompat
 import com.bossxomlut.dragspend.util.AppLog
 
 enum class StartDestination {
@@ -63,7 +65,12 @@ fun AppNavGraph(
     profileCache: ProfileCache = koinInject(),
 ) {
     var startDestination by remember { mutableStateOf(StartDestination.CHECKING) }
-    var selectedLanguage by remember { mutableStateOf("en") }
+    // Seed from AppCompat so that after Activity recreation (API < 33) we restore the
+    // correct locale immediately, without waiting for the profile-cache LaunchedEffect.
+    var selectedLanguage by remember {
+        val stored = AppCompatDelegate.getApplicationLocales().get(0)?.language
+        mutableStateOf(stored ?: "en")
+    }
 
     // Always capture the latest lambda so LaunchedEffect(Unit) never needs to restart.
     val currentOnReady by rememberUpdatedState(onReady)
@@ -144,8 +151,17 @@ fun AppNavGraph(
 
     val context = LocalContext.current
     val activityResultRegistryOwner = LocalActivityResultRegistryOwner.current
+
+    // Persist language so attachBaseContext can read it on next Activity creation
+    LaunchedEffect(selectedLanguage) {
+        context.applicationContext
+            .getSharedPreferences("app_lang_prefs", android.content.Context.MODE_PRIVATE)
+            .edit().putString("language", selectedLanguage).apply()
+    }
+
     val localizedContext = remember(selectedLanguage) {
         val locale = Locale.forLanguageTag(selectedLanguage)
+        Locale.setDefault(locale)
         val config = Configuration(context.resources.configuration)
         config.setLocale(locale)
         context.createConfigurationContext(config)
@@ -315,6 +331,9 @@ fun AppNavGraph(
                         val userId = supabase.auth.currentUserOrNull()?.id
                         if (userId != null) profileCache.saveLanguage(userId, language)
                         selectedLanguage = language
+                        // Recreate so attachBaseContext + getResources() apply the new
+                        // locale to all Activity windows including DatePickerDialog.
+                        (context as? android.app.Activity)?.recreate()
                     },
                 )
             }

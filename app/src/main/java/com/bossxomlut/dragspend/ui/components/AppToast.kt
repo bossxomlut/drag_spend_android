@@ -1,5 +1,7 @@
 package com.bossxomlut.dragspend.ui.components
 
+import android.content.res.Configuration.UI_MODE_NIGHT_NO
+import android.content.res.Configuration.UI_MODE_NIGHT_YES
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.fadeIn
@@ -34,8 +36,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
+import com.bossxomlut.dragspend.ui.theme.DragSpendTheme
 import kotlin.math.abs
 import kotlin.math.roundToInt
 import kotlinx.coroutines.delay
@@ -155,5 +159,19 @@ fun AppToast(
                 }
             }
         }
+    }
+}
+
+
+@Preview(showBackground = true, uiMode = UI_MODE_NIGHT_NO, name = "Light")
+@Preview(showBackground = true, uiMode = UI_MODE_NIGHT_YES, name = "Dark")
+@Composable
+private fun AppToastPreview() {
+    DragSpendTheme {
+        AppToast(
+            message = "This is a toast message",
+            type = ToastType.ERROR,
+            onDismiss = {},
+        )
     }
 }

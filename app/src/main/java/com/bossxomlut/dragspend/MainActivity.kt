@@ -33,6 +33,35 @@ import org.koin.android.ext.android.inject
 
 class MainActivity : ComponentActivity() {
 
+    private fun getSavedLocale(): java.util.Locale? {
+        val lang = getSharedPreferences("app_lang_prefs", android.content.Context.MODE_PRIVATE)
+            .getString("language", null) ?: return null
+        return java.util.Locale.forLanguageTag(lang)
+    }
+
+    override fun attachBaseContext(newBase: android.content.Context) {
+        val lang = newBase.getSharedPreferences("app_lang_prefs", android.content.Context.MODE_PRIVATE)
+            .getString("language", null)
+        if (lang != null) {
+            val locale = java.util.Locale.forLanguageTag(lang)
+            val config = android.content.res.Configuration(newBase.resources.configuration)
+            config.setLocale(locale)
+            super.attachBaseContext(newBase.createConfigurationContext(config))
+        } else {
+            super.attachBaseContext(newBase)
+        }
+    }
+
+    override fun getResources(): android.content.res.Resources {
+        val locale = getSavedLocale()
+        if (locale != null) {
+            val config = android.content.res.Configuration(super.getResources().configuration)
+            config.setLocale(locale)
+            return createConfigurationContext(config).resources
+        }
+        return super.getResources()
+    }
+
     private val supabase: SupabaseClient by inject()
     private val appPreferences: AppPreferences by inject()
 
