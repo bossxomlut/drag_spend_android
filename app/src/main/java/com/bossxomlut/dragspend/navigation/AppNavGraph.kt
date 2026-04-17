@@ -333,7 +333,13 @@ fun AppNavGraph(
                         selectedLanguage = language
                         // Recreate so attachBaseContext + getResources() apply the new
                         // locale to all Activity windows including DatePickerDialog.
-                        (context as? android.app.Activity)?.recreate()
+                        // Deferred via Handler.post so the current Compose frame finishes
+                        // before the old Activity is destroyed, preventing
+                        // DeadObjectException and top-resumed-state-loss timeout warnings.
+                        val activity = context as? android.app.Activity
+                        android.os.Handler(android.os.Looper.getMainLooper()).post {
+                            activity?.recreate()
+                        }
                     },
                 )
             }

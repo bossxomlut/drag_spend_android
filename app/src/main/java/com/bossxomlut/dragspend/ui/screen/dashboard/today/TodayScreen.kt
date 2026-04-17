@@ -78,10 +78,6 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.DatePicker
-import androidx.compose.material3.DatePickerDefaults
-import androidx.compose.material3.DatePickerDialog
-import androidx.compose.material3.DatePickerFormatter
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -103,7 +99,6 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.rememberBottomSheetScaffoldState
-import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.material3.rememberStandardBottomSheetState
 import androidx.compose.runtime.Composable
@@ -157,8 +152,10 @@ import java.time.YearMonth
 import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
 import java.time.format.TextStyle
+import androidx.compose.ui.window.Dialog
 import com.bossxomlut.dragspend.ui.util.currentLocale
-import com.bossxomlut.dragspend.ui.util.rememberLocalizedDatePickerFormatter
+import com.bossxomlut.dragspend.ui.util.formatMonthYear
+import com.bossxomlut.dragspend.ui.util.localizedShortName
 import java.util.Locale
 import kotlin.math.abs
 import kotlin.math.roundToInt
@@ -898,41 +895,14 @@ private fun DayView(
         } // end Box
 
         if (showDatePicker) {
-            val datePickerState = rememberDatePickerState(
-                initialSelectedDateMillis = today
-                    .atStartOfDay(ZoneOffset.UTC)
-                    .toInstant()
-                    .toEpochMilli(),
+            LocalizedDatePickerDialog(
+                initialDate = today,
+                onDateSelected = { selected ->
+                    onDateChange(selected.format(dateFormatter))
+                    showDatePicker = false
+                },
+                onDismiss = { showDatePicker = false },
             )
-            val datePickerFormatter = rememberLocalizedDatePickerFormatter()
-            val localizedCtx = LocalContext.current
-            CompositionLocalProvider(LocalContext provides localizedCtx) {
-            DatePickerDialog(
-                onDismissRequest = { showDatePicker = false },
-                confirmButton = {
-                    TextButton(onClick = {
-                        datePickerState.selectedDateMillis?.let { millis ->
-                            val selected = Instant.ofEpochMilli(millis)
-                                .atZone(ZoneOffset.UTC)
-                                .toLocalDate()
-                            onDateChange(selected.format(dateFormatter))
-                        }
-                        showDatePicker = false
-                    }) {
-                        Text(stringResource(R.string.action_confirm))
-                    }
-                },
-                dismissButton = {
-                    TextButton(onClick = { showDatePicker = false }) {
-                        Text(stringResource(R.string.action_cancel))
-                    }
-                },
-            ) {
-                DatePicker(
-                    dateFormatter = datePickerFormatter,
-                    state = datePickerState)
-            }
-            }
         }
     } // end DayView Box
 
@@ -965,8 +935,7 @@ private fun MonthOverviewCalendar(
 
     val dayLabels = remember(locale) {
         (0..6).map { offset ->
-            DayOfWeek.MONDAY.plus(offset.toLong())
-                .getDisplayName(TextStyle.SHORT, locale)
+            DayOfWeek.MONDAY.plus(offset.toLong()).localizedShortName(locale)
         }
     }
 
@@ -1917,6 +1886,181 @@ private fun SpendingCardsPanel(
                 fontWeight = FontWeight.SemiBold,
                 color = color,
             )
+        }
+    }
+
+    // ---------------------------------------------------------------------------
+    // Locale-aware date picker dialog
+    // Replaces Material3 DatePicker whose day column headers cannot be overridden
+    // for Vietnamese (ICU NARROW style renders "T" for Mon–Sat).
+    // ---------------------------------------------------------------------------
+
+    @RequiresApi(Build.VERSION_CODES.O)
+    @Composable
+    private fun LocalizedDatePickerDialog(
+        initialDate: LocalDate,
+        onDateSelected: (LocalDate) -> Unit,
+        onDismiss: () -> Unit,
+    ) {
+        val locale = currentLocale
+        var displayMonth by remember { mutableStateOf(YearMonth.from(initialDate)) }
+        var selectedDate by remember { mutableStateOf(initialDate) }
+        val today = LocalDate.now()
+        val dateFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd")
+
+        val dayLabels = remember(locale) {
+            (0..6).map { offset ->
+                DayOfWeek.MONDAY.plus(offset.toLong()).localizedShortName(locale)
+            }
+        }
+
+        Dialog(onDismissRequest = onDismiss) {
+            Surface(
+                shape = RoundedCornerShape(28.dp),
+                color = MaterialTheme.colorScheme.surface,
+                tonalElevation = 6.dp,
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Column(modifier = Modifier.padding(24.dp)) {
+                    // Month/year navigation header
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                    ) {
+                        IconButton(onClick = { displayMonth = displayMonth.minusMonths(1) }) {
+                            Icon(
+                                Icons.AutoMirrored.Filled.KeyboardArrowLeft,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.onSurface,
+                            )
+                        }
+                        Text(
+                            text = formatMonthYear(
+                                displayMonth.atDay(1)
+                                    .atStartOfDay(ZoneOffset.UTC)
+                                    .toInstant()
+                                    .toEpochMilli(),
+                                locale,
+                            ),
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurface,
+                        )
+                        IconButton(
+                            onClick = { displayMonth = displayMonth.plusMonths(1) },
+                            enabled = displayMonth < YearMonth.now(),
+                        ) {
+                            Icon(
+                                Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                                contentDescription = null,
+                                tint = if (displayMonth < YearMonth.now()) {
+                                    MaterialTheme.colorScheme.onSurface
+                                } else {
+                                    MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f)
+                                },
+                            )
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    // Day-of-week header row
+                    Row(modifier = Modifier.fillMaxWidth()) {
+                        dayLabels.forEach { label ->
+                            Text(
+                                text = label,
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                textAlign = TextAlign.Center,
+                                modifier = Modifier.weight(1f),
+                            )
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(4.dp))
+
+                    // Calendar grid
+                    val firstDayOfMonth = displayMonth.atDay(1)
+                    val startOffset = (firstDayOfMonth.dayOfWeek.value - 1 + 7) % 7
+                    val daysInMonth = displayMonth.lengthOfMonth()
+                    val totalCells = startOffset + daysInMonth
+                    val rows = (totalCells + 6) / 7
+
+                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        for (row in 0 until rows) {
+                            Row(modifier = Modifier.fillMaxWidth()) {
+                                for (col in 0 until 7) {
+                                    val cellIndex = row * 7 + col
+                                    val dayNumber = cellIndex - startOffset + 1
+                                    if (dayNumber < 1 || dayNumber > daysInMonth) {
+                                        Spacer(modifier = Modifier.weight(1f))
+                                    } else {
+                                        val date = displayMonth.atDay(dayNumber)
+                                        val isFuture = date.isAfter(today)
+                                        val isSelected = date == selectedDate
+                                        val isToday = date == today
+
+                                        Box(
+                                            modifier = Modifier
+                                                .weight(1f)
+                                                .aspectRatio(1f)
+                                                .clip(CircleShape)
+                                                .background(
+                                                    when {
+                                                        isSelected -> MaterialTheme.colorScheme.primary
+                                                        isToday -> MaterialTheme.colorScheme.primaryContainer
+                                                        else -> Color.Transparent
+                                                    },
+                                                )
+                                                .then(
+                                                    if (isToday && !isSelected) {
+                                                        Modifier.border(
+                                                            1.dp,
+                                                            MaterialTheme.colorScheme.primary,
+                                                            CircleShape,
+                                                        )
+                                                    } else {
+                                                        Modifier
+                                                    },
+                                                )
+                                                .clickable(enabled = !isFuture) { selectedDate = date },
+                                            contentAlignment = Alignment.Center,
+                                        ) {
+                                            Text(
+                                                text = dayNumber.toString(),
+                                                style = MaterialTheme.typography.bodySmall,
+                                                color = when {
+                                                    isSelected -> MaterialTheme.colorScheme.onPrimary
+                                                    isFuture -> MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f)
+                                                    else -> MaterialTheme.colorScheme.onSurface
+                                                },
+                                                fontWeight = if (isSelected || isToday) FontWeight.Bold else FontWeight.Normal,
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    // Confirm / Cancel buttons
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.End,
+                    ) {
+                        TextButton(onClick = onDismiss) {
+                            Text(stringResource(R.string.action_cancel))
+                        }
+                        Spacer(modifier = Modifier.width(8.dp))
+                        TextButton(onClick = { onDateSelected(selectedDate) }) {
+                            Text(stringResource(R.string.action_confirm))
+                        }
+                    }
+                }
+            }
         }
     }
 
