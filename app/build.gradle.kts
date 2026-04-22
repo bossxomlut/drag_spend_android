@@ -11,6 +11,8 @@ plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.kotlin.serialization)
+    alias(libs.plugins.google.services)
+    alias(libs.plugins.firebase.crashlytics)
 }
 
 android {
@@ -56,6 +58,8 @@ android {
     buildTypes {
         debug {
             buildConfigField("boolean", "ENABLE_LOGGING", "true")
+            manifestPlaceholders["analyticsCollectionDeactivated"] = true
+            manifestPlaceholders["crashlyticsCollectionEnabled"] = false
         }
         create("profile") {
             initWith(getByName("debug"))
@@ -67,6 +71,11 @@ android {
             buildConfigField("boolean", "ENABLE_LOGGING", "false")
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
             signingConfig = signingConfigs.getByName("release")
+            configure<com.google.firebase.crashlytics.buildtools.gradle.CrashlyticsExtension> {
+                mappingFileUploadEnabled = true  
+            }
+            manifestPlaceholders["analyticsCollectionDeactivated"] = false
+            manifestPlaceholders["crashlyticsCollectionEnabled"] = true
         }
     }
     compileOptions {
@@ -116,6 +125,11 @@ dependencies {
 
     // Baseline Profiles — pre-compiles critical startup code paths on install
     implementation(libs.androidx.profileinstaller)
+
+    //Firebase
+    implementation(platform(libs.firebase.bom))
+    implementation(libs.firebase.analytics)
+    implementation(libs.firebase.crashlytics)
 
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)

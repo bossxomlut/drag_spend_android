@@ -38,6 +38,16 @@
         <receiver
             android:name=".receiver.ReminderReceiver"
             android:exported="false" />
+
+        <!-- Tắt analytics ở debug để không làm ô nhiễm data thật -->
+        <meta-data
+            android:name="firebase_analytics_collection_deactivated"
+            android:value="${analyticsCollectionDeactivated}" />
+
+        <!-- Tắt crashlytics ở debug để không upload crash test -->
+        <meta-data
+            android:name="firebase_crashlytics_collection_enabled"
+            android:value="${crashlyticsCollectionEnabled}" />
     </application>
 
 </manifest>
