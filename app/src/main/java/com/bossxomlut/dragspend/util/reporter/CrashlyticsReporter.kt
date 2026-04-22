@@ -15,33 +15,39 @@ import com.google.firebase.crashlytics.FirebaseCrashlytics
  */
 class CrashlyticsReporter : LogReporter {
 
-    private val crashlytics = FirebaseCrashlytics.getInstance()
+    private val crashlytics: FirebaseCrashlytics? by lazy {
+        try {
+            FirebaseCrashlytics.getInstance()
+        } catch (e: Exception) {
+            null
+        }
+    }
 
     override fun onDebug(feature: AppLog.Feature, action: String, detail: String) {
-        crashlytics.log("${feature.tag} ► $action | $detail")
+        crashlytics?.log("${feature.tag} ► $action | $detail")
     }
 
     override fun onSuccess(feature: AppLog.Feature, action: String, detail: String) {
-        crashlytics.log("${feature.tag} ✓ $action | $detail")
+        crashlytics?.log("${feature.tag} ✓ $action | $detail")
     }
 
     override fun onError(feature: AppLog.Feature, action: String, throwable: Throwable?, detail: String) {
-        crashlytics.setCustomKey("feature", feature.tag)
-        crashlytics.setCustomKey("action", action)
+        crashlytics?.setCustomKey("feature", feature.tag)
+        crashlytics?.setCustomKey("action", action)
         if (throwable != null) {
-            crashlytics.recordException(throwable)
+            crashlytics?.recordException(throwable)
         } else {
-            crashlytics.log("${feature.tag} ✗ $action | $detail")
+            crashlytics?.log("${feature.tag} ✗ $action | $detail")
         }
     }
 
     override fun onWarning(feature: AppLog.Feature, action: String, detail: String) {
-        crashlytics.log("${feature.tag} ⚠ $action | $detail")
+        crashlytics?.log("${feature.tag} ⚠ $action | $detail")
     }
 
     /** Call on login success / logout to correlate crashes with a specific user. */
-    fun setUserId(id: String) = crashlytics.setUserId(id)
+    fun setUserId(id: String) = crashlytics?.setUserId(id)
 
     /** Call on logout to clear the user association. */
-    fun clearUserId() = crashlytics.setUserId("")
+    fun clearUserId() = crashlytics?.setUserId("")
 }
