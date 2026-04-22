@@ -23,6 +23,9 @@ class CrashlyticsReporter : LogReporter {
         }
     }
 
+    /** True nếu Crashlytics component đã đăng ký thành công với FirebaseApp. */
+    val isAvailable: Boolean get() = crashlytics != null
+
     override fun onDebug(feature: AppLog.Feature, action: String, detail: String) {
         crashlytics?.log("${feature.tag} ► $action | $detail")
     }

@@ -40,6 +40,13 @@ class DragSpendApp : Application() {
             koin.get<AnalyticsReporter>(),
         )
 
+        val crashlyticsReporter = koin.get<CrashlyticsReporter>()
+        if (crashlyticsReporter.isAvailable) {
+            AppLog.d(AppLog.Feature.PERF, "Crashlytics", "initialized successfully")
+        } else {
+            AppLog.w(AppLog.Feature.PERF, "Crashlytics", "component not available — google-services.json missing or invalid")
+        }
+
         AppLog.d(AppLog.Feature.PERF, "Application.onCreate", "total=${SystemClock.elapsedRealtime() - t0}ms")
     }
 }
