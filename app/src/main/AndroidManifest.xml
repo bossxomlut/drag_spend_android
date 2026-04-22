@@ -6,6 +6,11 @@
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
 
+    <!-- Firebase/Play Services tự thêm AD_ID; app không dùng quảng cáo nên remove -->
+    <uses-permission
+        android:name="com.google.android.gms.permission.AD_ID"
+        tools:node="remove" />
+
     <application
         android:name=".DragSpendApp"
         android:allowBackup="true"
